@@ -34,6 +34,11 @@ COLMAP point track. It does not fabricate empty track/window pairs or select
 factors by depth, residual, ground truth, or outcome. Split, merged, and
 uninitialized track diagnostics are exact and may overlap.
 
+The extracted COLMAP model also preserves the complete selected-model
+`points3D` observation map as an immutable value. Consequently, D-009's
+retained/absent-in-COLMAP diagnostics can be reproduced directly from the
+stored model object without reparsing a mutable text export.
+
 ## Jacobian and gauge verification
 
 The central-difference step and tolerance were frozen before public-data use:
@@ -95,8 +100,24 @@ On 2026-11-24, Python 3.10.6 with `numpy==1.26.4`, `scipy==1.13.0`, and
 - successful `compileall`, `pip check`, and `git diff --check`.
 
 The CI workflow installs the pinned GTSAM extra and executes the same
-synthetic suite on Python 3.10. The local result must still receive independent
-Claude Code review before Gate C is called mutually approved.
+synthetic suite on Python 3.10. Commit
+`1bccdd693dcdf229a0db03825ff04b03e8b3a505` passed GitHub Actions run
+`45368753199`, job `138357216972`, on Ubuntu 24.04 with Python 3.10.14. An
+earlier run exposed only an over-tight exact-invariance test tolerance: the
+Ubuntu round-off was `1.14e-13` while the preregistered test allowed
+`6e-14`. The test-only tolerance was widened to `2e-13`; the factor,
+Jacobian, solver, and recovery implementation were unchanged.
+
+The exact same commit was then checked out independently on the RTX 4070
+workstation at
+`/home/azumayudai/Desktop/ws_snn/eSfO-paper-faithful`. Ubuntu 24.04.4,
+Python 3.10.14, NumPy 1.26.4, SciPy 1.13.0, and GTSAM 4.2 again reported
+`135 passed` (four known HDBSCAN warnings), plus successful `compileall`,
+`pip check`, and `git diff --check`. This synthetic suite is CPU-only; the
+presence of the RTX 4070 is not evidence of GPU validation or performance.
+
+These cross-platform results still require independent Claude Code review
+before Gate C is called mutually approved.
 
 ## Evidence boundary and next gate
 
