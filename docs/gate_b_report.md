@@ -1,9 +1,8 @@
 # Gate B report: initialization components
 
-Status: **local implementation, synthetic unit tests, and pinned COLMAP 3.9.1
-sidecar integration complete; the initial B1 correction was accepted, and its
-B1-prime circle-centre follow-up is implemented and awaiting focused
-re-review**.
+Status: **final Gate B approval recorded. Local implementation, synthetic unit
+tests, pinned COLMAP 3.9.1 sidecar integration, B1, and B1-prime are approved;
+Gate D is authorized and in progress**.
 
 Gate B implements the paper's COLMAP preparation, Eqs. (6)--(10)
 initialization, and the frozen conventions needed to make those operations
@@ -23,8 +22,9 @@ CAD result was used to choose or validate an interpretation.
   interpolation, range prior, or harmonic correction;
 - excludes DC, includes Nyquist, and resolves exact ties toward the lower
   frequency;
-- records all omitted/used event counts, the complete spectrum, and the
-  zero-positive-power diagnostic.
+- records all omitted/used event counts and the complete spectrum;
+- fails closed as `fft_frequency_unobservable` when every positive-frequency
+  power is exactly zero, rather than manufacturing a lowest-bin estimate.
 
 ### Plane, circle, orbit geometry, and `R_0`
 
@@ -75,6 +75,11 @@ rules, not fitted thresholds.
   IDs and `points3D.txt` tracks;
 - excludes and counts non-bijective source-track/COLMAP-point mappings rather
   than choosing a favorable reconstruction.
+
+N3's immutable upstream ranges and three-way failure taxonomy are recorded in
+[`source_audit.md`](source_audit.md#colmap): method outcome failure,
+validator/postcondition failure, and execution/environment failure. These
+labels never authorize a retry, fallback, or alternate estimator.
 
 This repository does not implement a substitute SfM algorithm. The local
 tests validate preparation, database semantics, commands, and postconditions.
@@ -153,5 +158,8 @@ unsigned circle first and uses
 `q_k=(I-nn^T)(C_k-c^w)` for the unchanged non-aliased-pair score. A
 deterministic sparse fixture also proves the old and new signs differ, and a
 rotated/translated fixture checks the world-frame convention. No TOPSPIN
-scene or result selected this correction. The B1-prime difference now awaits
-focused re-review before integrated Gate D evidence.
+scene or result selected this correction. Claude Code's focused re-review of
+final commit `9313c6da48399432e06cc080f07f832574176aae` independently repeated
+the 899-orbit audit (new circle-centre rule: zero wrong signs; old centroid
+rule: two) and approved B1-prime. Gate B is therefore finally approved and
+Gate D is authorized.

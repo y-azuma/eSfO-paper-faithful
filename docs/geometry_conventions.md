@@ -1,7 +1,7 @@
 # Geometry conventions for the paper-faithful reference path
 
-Status: **Gate A approved; Gate C core approved; B1-prime and C1 corrections
-implemented and awaiting focused re-review**.
+Status: **Gates A--C mutually approved; B1-prime and C1 approved by focused
+Claude Code re-review; Gate D authorized and in progress**.
 
 This document freezes the geometric conventions needed to implement eSfO.
 It separates statements printed in the paper from conventions that are needed

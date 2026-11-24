@@ -1,6 +1,6 @@
 # Primary-source and public-artifact audit
 
-Status: preimplementation audit, 2026-11-24.
+Status: living source audit through Gate D implementation, 2026-11-24.
 
 ## Paper identity
 
@@ -84,6 +84,15 @@ still **Ambiguous** with respect to the authors' actual build. An independent
 criterion reimplementation must also remain Ambiguous and must not claim
 bitwise identity without author code or golden outputs.
 
+For N4, a legally isolated audit compiles the pinned GPL implementation only
+from an external checkout and commits only deterministic generator metadata
+and its boolean decision-mask hash. The test covers 13,000 event decisions,
+of which 1,000 are positive corner decisions. The installed reference package
+does not contain or import GPL implementation source. This committed oracle is
+separate from Claude Code's earlier 171,761-decision independent scratchpad
+comparison; the smaller reproducible fixture neither replaces that audit nor
+retroactively packages it.
+
 ### HDBSCAN
 
 The paper cites McInnes et al. but names no implementation or version. Table 2
@@ -107,6 +116,27 @@ The frozen reference selects COLMAP `3.9.1`, the latest stable non-RC release
 available before arXiv v1 on 2024-05-10; this is not a claim about the authors'
 build. Undistortion's new camera matrix and bundle-adjustment refinement flags
 are also absent from the paper and therefore frozen interpretations.
+
+The COLMAP behavior used by the reference path is pinned to immutable commit
+`e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68` at these primary-source ranges:
+
+- [two-view configuration enum (`scene/two_view_geometry.h`, lines 40--58)](https://github.com/colmap/colmap/blob/e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68/src/colmap/scene/two_view_geometry.h#L40-L58);
+- [two-view estimator defaults (`estimators/two_view_geometry.h`, lines 42--106)](https://github.com/colmap/colmap/blob/e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68/src/colmap/estimators/two_view_geometry.h#L42-L106);
+- [two-view method selection (`estimators/two_view_geometry.cc`, lines 420--554)](https://github.com/colmap/colmap/blob/e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68/src/colmap/estimators/two_view_geometry.cc#L420-L554); and
+- [watermark-pair exclusion while loading the database (`scene/database_cache.cc`, lines 72--87)](https://github.com/colmap/colmap/blob/e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68/src/colmap/scene/database_cache.cc#L72-L87).
+
+N3 freezes three failure categories. A **method outcome failure** means the
+pinned method executed but returned no usable result (for example no raw or
+verified pair, no model, or insufficient registered views). A
+**validator/postcondition failure** means an output exists but is malformed or
+inconsistent with the frozen contract (for example pair/configuration/inlier
+count mismatch, invalid duplicate verified matches, a changed fixed camera,
+or inconsistent model tracks). An **execution/environment failure** means the
+method could not execute as pinned (for example an unavailable or
+version-mismatched dependency or nonzero subprocess exit). Timeout and OOM
+remain separately named cross-cutting resource failures. These categories are
+reporting labels only: none authorizes a retry, alternate method, fallback, or
+selective exclusion.
 
 ### Factor graph / GTSAM
 

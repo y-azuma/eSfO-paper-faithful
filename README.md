@@ -5,17 +5,18 @@ Latif, Park, and Chin, CVPR 2024).
 
 ## Status
 
-**Gate C: direct orbit factor and gauge-aware synthetic recovery.** Gate A was
-mutually approved after independent Codex/Claude Code review, including
-synthetic differential eFAST validation. The Sec. 4 front end, Gate B
-initialization, and Gate C direct-GTSAM factor are implemented and tested only
-on synthetic fixtures; no public-TOPSPIN performance result is accepted as a
-paper reproduction result. Claude Code approved D-009 and the Gate C factor,
-Jacobians, GTSAM wiring, provenance, gauge, and Sim(3) recovery criterion. Its
-review found two narrow integration blockers: the sparse-view temporal-sign
-reference point (B1-prime) and LM trial-step cheirality handling (C1). Both
-result-independent corrections are implemented and await focused re-review
-before integrated Gate D evidence is created.
+**Gate D: integrated synthetic evidence and instrumentation in progress.**
+Gates A--C are mutually approved after independent Codex/Claude Code review.
+Claude Code's focused re-review of final commit
+`9313c6da48399432e06cc080f07f832574176aae` approved the sparse-view
+temporal-sign correction (B1-prime) and LM trial-step cheirality correction
+(C1), gave final approval to Gates B and C, and authorized Gate D. The Sec. 4
+front end, Gate B initialization, and Gate C direct-GTSAM factor are
+implemented and tested only on synthetic fixtures; no public-TOPSPIN
+performance result is accepted as a paper reproduction result. Gate D's
+result-independent N1, N3, and N4 closures are recorded in the governing
+documents, while N5/N6 and the integrated Gate D evidence remain unfinished.
+Public TOPSPIN execution is still prohibited.
 The authors' paper-listed code URL and the supplementary material referenced
 by the paper are currently unavailable.
 

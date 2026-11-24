@@ -1,0 +1,22 @@
+{
+  "corner_count": 1000,
+  "event_count": 13000,
+  "input_generator": {
+    "pulse_count": 1000,
+    "random_event_count": 5000,
+    "random_seed": 20240510,
+    "timestamps": "positive_integer_microseconds_converted_to_seconds"
+  },
+  "input_sha256": "3f9667a94576c942e4f4b3607e48016aa26d2162685c6498dc65adead8174494",
+  "license_boundary": "external_GPL_checkout_test_only_not_in_wheel",
+  "mask_encoding": "numpy.packbits(bitorder=little)",
+  "mask_sha256": "9c125473ce0f0066dd79e4b72c9a3debbe1fae3ec7485f0ac22675637a99f2eb",
+  "schema": "esfo-efast-upstream-oracle-v1",
+  "upstream_commit": "e6c88625479a62e649ff391e2489ef6470955411",
+  "upstream_file_sha256": {
+    "corner_event_detector/include/corner_event_detector/detector.h": "0fa7f2cee3a78d5d7c8c8d65d4b69d56e5a7fac0d734ef65372eebc7e93a8756",
+    "corner_event_detector/include/corner_event_detector/fast_detector.h": "511b4423d534c75202d039fbcd02863a3d6d2fe9eb3f6737d33357fa6d6f32bf",
+    "corner_event_detector/src/fast_detector.cpp": "39dfb374dad435a2a143e0b2f32e9f2e6023139baa433e192a20b0fed48dae81"
+  },
+  "upstream_repository": "https://github.com/uzh-rpg/rpg_corner_events"
+}

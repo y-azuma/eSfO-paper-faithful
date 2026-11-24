@@ -1,8 +1,8 @@
 # Gate C report: direct orbit factor and gauge-aware recovery
 
-Status: **factor mathematics, Jacobians, GTSAM binding, provenance, gauge, and
-Sim(3) recovery independently approved; C1 cheirality correction implemented
-and awaiting focused re-review**.
+Status: **final Gate C approval recorded. Factor mathematics, Jacobians, GTSAM
+binding, provenance, gauge, Sim(3) recovery, and C1 cheirality handling are
+independently approved; Gate D is authorized and in progress**.
 
 Gate C implements only the paper's orbit-constrained reprojection stage under
 the frozen, result-independent conventions in
@@ -127,9 +127,10 @@ On 2026-11-24, Python 3.10.6 with `numpy==1.26.4`, `scipy==1.13.0`, and
 The corrected implementation commit
 `6640dad46f51825fa311b72d44aceccc4bf0e673` passed GitHub Actions run
 `45372999990`, job `138371780290`, on Ubuntu 24.04 / Python 3.10.14 with all
-`139` tests. This is the authoritative B1-prime/C1 evidence submitted for
-focused re-review. Earlier commit `1bccdd6` and run `45368753199` establish
-only the pre-correction core. A previous CPU-only rerun on the 4070
+`139` tests. This is the authoritative B1-prime/C1 evidence submitted for and
+approved in the focused re-review. Earlier commit `1bccdd6` and run
+`45368753199` establish only the pre-correction core. A previous CPU-only rerun
+on the 4070
 workstation is historical corroboration and is not relied on for the corrected
 result.
 
@@ -137,8 +138,13 @@ Claude Code independently re-derived all seven Jacobian blocks (maximum
 relative discrepancy `6.5e-10`), reproduced nullity ten, and recovered a
 perturbed synthetic problem from graph error `6.9e4` to `1.2e-24` with
 joint-Sim(3) RMSE `2.8e-16`. It approved D-009 and the Gate C core. Its C1
-finding and B1-prime Gate B finding are narrow post-review corrections, not a
-withdrawal of those approved results.
+finding and B1-prime Gate B finding were narrow post-review corrections, not
+a withdrawal of those approved results. In the focused re-review of final
+commit `9313c6da48399432e06cc080f07f832574176aae`, Claude Code confirmed the
+exact GTSAM 4.2 `(2*fx,2*fx)` residual, zero Jacobians, and
+`throwCheirality=false`. In 40 deterministic LM stress perturbations none
+aborted; 19/40 ended with a behind-camera factor and correctly retained the
+fail-closed final-depth failure. C1 and Gate C received final approval.
 
 ## Evidence boundary and next gate
 
@@ -149,6 +155,6 @@ used these missing conventions or that the method reproduces paper behavior
 on TOPSPIN.
 
 Gate D's stage-boundary provenance, resume, fail-closed metric, and resource
-instrumentation may proceed, but integrated synthetic evidence must use the
-focused-reapproved B1-prime/C1 commit. Public TOPSPIN execution remains
-prohibited until Gates A--D and both reviewers approve it.
+instrumentation are authorized and in progress. Integrated synthetic evidence
+must use the focused-reapproved B1-prime/C1 commit. Public TOPSPIN execution
+remains prohibited until Gate D is complete and both reviewers approve it.

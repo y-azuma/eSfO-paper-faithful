@@ -1,7 +1,7 @@
 # Paper-faithful reproduction decision log
 
-Status: **Gate A approved; D-009 and the Gate C core approved; B1-prime and
-C1 corrections implemented and awaiting focused re-review**
+Status: **Gates A--C mutually approved; B1-prime and C1 approved in focused
+re-review; Gate D authorized and in progress; no public TOPSPIN run**
 Scope: eSfO reproduction, not a method-improvement project.
 
 Unclosed non-blocking findings and their mandatory closure gates are tracked
@@ -208,10 +208,11 @@ forbidden.
 - FFT initialization uses exact integer-microsecond 20 ms boundaries from the
   raw `EventSequence`, so window membership cannot depend on the one-ulp
   float conversion discussed in the Gate A review. Nyquist is a positive
-  candidate. If every positive-frequency power is exactly zero, the exact-tie
-  rule returns the lowest positive bin and records
-  `zero_positive_power=true`; adding a confidence threshold would be a new
-  paper-unstated rule.
+  candidate. If every positive-frequency power is exactly zero, frequency is
+  not observable and initialization fails closed as
+  `fft_frequency_unobservable`. The lower-frequency tie rule applies only
+  when at least one positive-frequency bin has nonzero power. This exact-zero
+  check is not a confidence threshold and does not introduce a fitted value.
 - The plane/circle implementation uses the float64 rank and degeneracy rules
   recorded in [`geometry_conventions.md`](geometry_conventions.md). In
   particular, it does not replace the printed ordinary regression with TLS
@@ -336,6 +337,121 @@ B1-prime follows the circular orbit in Eq. (1); C1 follows pinned GTSAM commit
 `gtsam/slam/ProjectionFactor.h` lines 153--163. Neither rule was chosen from a
 TOPSPIN result.
 
+## D-012 - Gate D result-independent closures before integrated evidence
+
+The following review items are closed without executing TOPSPIN. They freeze
+failure and audit behavior; they do not constitute the integrated Gate D run.
+
+- **N1 / exact-zero FFT:** all-zero positive-frequency power fails as
+  `fft_frequency_unobservable`, as specified in D-008. No lowest-bin estimate
+  or confidence-threshold recovery is permitted.
+- **N3 / COLMAP failure provenance:** pinned COLMAP commit
+  `e99036415ec0cf0f75c1d0b8d60fdd91af0d6c68` is cited by immutable source
+  links for the two-view enum, default estimator options, method-selection
+  path, and watermark-image exclusion. Reporting distinguishes three
+  categories: (1) method outcome failure, where the pinned method runs but
+  yields no usable model; (2) validator/postcondition failure, where produced
+  output is malformed or inconsistent; and (3) execution/environment failure,
+  including unavailable/version-mismatched dependencies, nonzero subprocess
+  exit. Timeout and OOM remain separately named cross-cutting resource
+  failures. These labels do not authorize retry, fallback, or recovery.
+- **N4 / eFAST differential oracle:** a test-only external GPL checkout at
+  pinned commit `e6c88625479a62e649ff391e2489ef6470955411` generates a committed
+  oracle of 13,000 event decisions, including 1,000 positive corner
+  decisions. The reference package neither imports nor copies GPL
+  implementation code. This committed
+  oracle is separate from the earlier independent 171,761-decision scratchpad
+  audit; one does not replace or retroactively package the other.
+
+N5 (one integrated diagnostics/manifest record) and N6 (synthetic scale
+runtime/peak-RAM evidence) remain open. Consequently Gate D is authorized but
+not complete, and no Gate D report or public TOPSPIN result is yet accepted.
+
+## D-013 - Canonical Gate D sidecar fixture frozen before execution
+
+The original 18-point integration fixture remains the fast unit/plumbing
+fixture. It cannot be canonical COLMAP evidence because unmodified COLMAP
+3.9.1 uses `Mapper.init_min_num_inliers=100`. Lowering that default, copying
+tracks, or injecting correspondences which did not pass the real front end is
+forbidden. Before any public-data result or actual COLMAP-sidecar result was
+observed, a separate deterministic fixture was therefore frozen from
+synthetic-only fixture probes with:
+
+- one 128-phase full orbit, 120 non-coplanar points selected by fixed indices
+  from a seeded candidate cloud, and the unchanged `640 x 480`, `fx=fy=400`
+  synthetic camera;
+- one eFAST ring followed by twenty same-pixel centre events at an 800 us
+  cadence per point and phase, yielding 414,721 sorted raw events; this is a
+  synthetic integration stimulus, not a change to eFAST, density filtering,
+  HDBSCAN, Eq. (3) association, or a public-scene setting;
+- a fixed `+0.05` world-x translation of the point cloud, chosen on synthetic
+  truth to make the otherwise near-symmetric raw mean-x signal expose the
+  full-orbit FFT fundamental rather than its second harmonic; and
+- exact raw-front-end counts of 312,312 eFAST corners, 168,960 retained
+  corners, 15,343 HDBSCAN clusters, zero noise labels, 120 associated tracks,
+  13,928 Eq. (4) observations, and 126 logical views.
+
+Independent fresh runs on macOS and the 4070 Linux host both retained 106
+tracks in every view and every all-pairs intersection. This is only a raw
+correspondence margin of six over COLMAP's default. It is not accepted as 106
+verified inliers. Canonical evidence must still run the pinned sidecar,
+validate every geometric-verification pair, and complete the mapper. If that
+path has fewer than 100 usable inliers or no model, it fails closed; the
+COLMAP threshold may not be changed. No TOPSPIN scene informed this fixture.
+
+## D-014 - Canonical N6 scale and measurement scope frozen before execution
+
+Before the accepted clean-commit full-scale N6 run, freeze the deterministic
+synthetic benchmark at **168,960 HDBSCAN input events in 32 separated
+clusters**, and **128 COLMAP views by 512 complete tracks**. The event count
+equals the retained-corner count of the D-013 canonical front-end fixture, so
+whole-stream HDBSCAN is measured at the integrated synthetic workload rather
+than at a smaller convenience sample. The COLMAP dimensions create all
+`128 choose 2` image pairs and exactly **4,161,536 raw correspondence rows**,
+explicitly exercising the all-pairs scaling risk. The 32 generated clusters
+are only a deterministic, nondegenerate resource fixture; they are not a
+paper parameter, a model of the D-013 cluster count, or a public-data-derived
+setting.
+
+Measure three scopes separately:
+
+1. whole-stream reference HDBSCAN with no external chunking, subsampling, or
+   approximation;
+2. auxiliary all-pairs text materialization and raw-SQLite insertion, which
+   excludes geometric verification and the mapper; and
+3. the actual pinned COLMAP 3.9.1
+   `matches_importer --match_type raw`, including geometric verification but
+   excluding the mapper.
+
+Sample the complete worker process tree every **10 ms** from Linux `/proc`;
+for the sidecar importer, sample its in-container `/proc` tree rather than the
+host Docker-client process alone. Accepted N6 evidence requires a clean Git
+tree at a recorded commit, Linux canonical measurement methods, the pinned
+sidecar image/revision/version/binary SHA-256, exact fixture and output hashes,
+and successful raw/verified database validation. macOS fallback measurements,
+dirty-tree probes, skipped importer execution, manual SQLite insertion alone,
+or mapper runtime are not accepted N6 evidence. The Gate D report must record
+host CPU model, physical and logical core counts, total RAM, OS/kernel, and
+the three separate wall-time/peak-RSS results. No TOPSPIN scene or result
+informed these dimensions.
+
+Freeze the cross-platform **semantic fixture identities** before the accepted
+run as follows:
+
+- canonical integrated synthetic fixture:
+  `499c760fa35a0a1ec00f824065337115eec421f54c8cf144809d47e7fb05566f`;
+- N6 HDBSCAN fixture:
+  `6e9bc65b0375506f96e69eb766c4b1384fca6f4e417e837f38445dfc85ee9263`;
+- N6 COLMAP fixture:
+  `f9dc9f77434273f8470a42988e815cfd032238d9d2cedb3ee35eb15bffdd1df6`.
+
+These identities use the frozen semantic-hash schema with floating values
+quantized to `1e-9` **for identity serialization only**, eliminating
+irrelevant macOS/Linux last-bit differences. The arrays passed to eFAST,
+HDBSCAN, COLMAP, FFT, geometry, and GTSAM remain the original unquantized
+method inputs. Quantization must never be applied to method execution or used
+to relax a numerical validation.
+
 ## Change log
 
 | Date | Decision | Evidence | Agreed by |
@@ -352,4 +468,8 @@ TOPSPIN result.
 | 2026-11-24 | Gate C direct factors, analytic Jacobians, D-009 observation provenance, prior-free GTSAM recovery, and the ten-dimensional gauge passed the complete synthetic suite. Cross-platform exact-invariance assertions were normalized from `5e-14`/`6e-14` to `2e-13`; no method or public-data result changed. This is intermediate core evidence, superseded for final Gate C status by the B1-prime/C1 correction evidence. | 135 synthetic tests; implementation commit `1bccdd693dcdf229a0db03825ff04b03e8b3a505`; GitHub Actions run `45368753199` | Codex implementation and cross-platform verification; Claude Code core review pending at that point |
 | 2026-11-24 | Independent review approved D-009 and the Gate C core, then identified B1-prime (centroid-referenced sparse chord) and C1 (CustomFactor cheirality exception). D-011 froze circle-centre sign scoring and the pinned GTSAM constant-penalty behavior before public-data execution. | Claude Code review of `bb1efce`; 899 noise-free orbit audit; GTSAM 4.2 primary source | Claude Code findings; Codex corrections; focused re-review pending |
 | 2026-11-24 | B1-prime and C1 were implemented with deterministic sparse-view, transformed-view, exact-penalty, zero-Jacobian, diagnostic-binding, and real negative-depth LM-trial fixtures. The complete corrected synthetic suite passed locally and on pinned Ubuntu CI; no TOPSPIN scene was executed. | 139 tests; implementation commit `6640dad46f51825fa311b72d44aceccc4bf0e673`; GitHub Actions run `45372999990`, job `138371780290` | Codex implementation and independent audit; Claude Code focused re-review pending |
+| 2026-11-24 | Focused re-review approved B1-prime and C1, gave final approval to Gates B and C, and authorized Gate D. The review repeated the 899-orbit sign audit and 40-perturbation cheirality stress audit; no TOPSPIN scene was executed. | Claude Code focused re-review of final commit `9313c6da48399432e06cc080f07f832574176aae` | Claude Code and Codex |
+| 2026-11-24 | D-012 closed N1/N3/N4 without public data: exact-zero FFT fails closed, COLMAP source/failure taxonomy is pinned, and a legally isolated 13,000-decision external-GPL eFAST oracle was added. N5/N6 and integrated Gate D evidence remain open. | Focused tests; immutable COLMAP `e9903641` source audit; external oracle metadata pinned to eFAST `e6c8862` | Codex implementation/audit; Gate D final review pending |
+| 2026-11-24 | D-013 froze a separate 120-point canonical-sidecar raw fixture because the unchanged COLMAP mapper requires 100 initial-pair inliers; the 18-point fixture remains unit-only. Mac and 4070 front-end runs agreed on a 106-track all-pairs raw margin. Actual verified inliers and mapper completion remain unproven until canonical sidecar execution. | Deterministic synthetic fixture; two fresh front-end executions; no public data | Codex implementation/audit; Gate D final review pending |
+| 2026-11-24 | D-014 froze the clean-commit Linux N6 benchmark at 168,960 HDBSCAN events, 32 generated clusters, 128 views, 512 complete tracks, and 10 ms `/proc` sampling. It separates auxiliary raw-SQLite preparation from actual pinned `matches_importer` geometric verification and excludes mapper runtime. Cross-platform semantic fixture identities use 1e-9 quantization for hashing only; method inputs remain unquantized. | Deterministic synthetic scale design, Mac/Linux identity comparison, and noncanonical tiny/medium feasibility probes; no public data | Codex implementation/audit; Gate D final review pending |
 

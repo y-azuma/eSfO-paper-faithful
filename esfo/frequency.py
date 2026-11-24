@@ -290,6 +290,15 @@ def _fft_peak_unchecked(
             "nonfinite_fft_power", "FFT power overflowed or is non-finite",
         )
     peak_bin, zero_positive = _select_positive_peak(power)
+    if zero_positive:
+        # There is no observable positive-frequency maximum when every
+        # positive bin has exactly zero power.  Returning the first bin would
+        # turn an information-free tie into an arbitrary physical speed.
+        # This is an exact fail-closed test, not a confidence threshold.
+        raise FrequencyInitializationError(
+            "fft_frequency_unobservable",
+            "all positive-frequency FFT bins have exactly zero power",
+        )
     frequency = float(frequencies[peak_bin])
     peak_power = float(power[peak_bin])
     resolution = float(1.0 / (values.size * sample_period_s))
@@ -350,7 +359,7 @@ def initialize_frequency_fft_raw(
         "dc_candidate": False,
         "nyquist_candidate": True,
         "tie_break": "exact_lowest_frequency",
-        "zero_positive_power_policy": "lowest_positive_bin_with_diagnostic",
+        "zero_positive_power_policy": "fail_fft_frequency_unobservable",
         "interpolation": False,
         "range_prior": False,
         "harmonic_correction": False,

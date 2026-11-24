@@ -83,17 +83,31 @@ def test_exact_tie_uses_lowest_positive_frequency_and_zero_flag() -> None:
     np.testing.assert_array_equal(impulse[5][1:], np.ones(4))
     assert not impulse[6]
 
-    flat = _fft_peak_unchecked(
-        np.ones(8, dtype=np.float64), sample_period_s=0.020,
+    assert _select_positive_peak(np.array([64.0, 0.0, 0.0, 0.0, 0.0])) == (
+        1, True,
     )
-    assert flat[0] == 6.25
-    assert flat[1] == 1
-    assert flat[6]
+    with pytest.raises(FrequencyInitializationError) as captured:
+        _fft_peak_unchecked(
+            np.ones(8, dtype=np.float64), sample_period_s=0.020,
+        )
+    assert captured.value.reason == "fft_frequency_unobservable"
 
 
 def test_near_tie_is_not_collapsed_by_a_tolerance() -> None:
     power = np.array([100.0, 1.0, np.nextafter(1.0, np.inf)])
     assert _select_positive_peak(power) == (2, False)
+
+
+def test_constant_window_signal_fails_as_frequency_unobservable() -> None:
+    # One event with the same x coordinate in every displayed window creates
+    # an exact DC-only signal; no arbitrary lowest positive bin is reported.
+    events = _events(
+        [0, 20_001, 40_001, 60_001, 80_001, 100_001, 120_001],
+        [7, 7, 7, 7, 7, 7, 7],
+    )
+    with pytest.raises(FrequencyInitializationError) as captured:
+        initialize_frequency_fft_raw(events)
+    assert captured.value.reason == "fft_frequency_unobservable"
 
 
 def test_no_harmonic_correction_or_frequency_prior() -> None:
@@ -195,7 +209,7 @@ def test_metadata_records_every_result_independent_choice() -> None:
         "dc_candidate": False,
         "nyquist_candidate": True,
         "tie_break": "exact_lowest_frequency",
-        "zero_positive_power_policy": "lowest_positive_bin_with_diagnostic",
+        "zero_positive_power_policy": "fail_fft_frequency_unobservable",
         "interpolation": False,
         "range_prior": False,
         "harmonic_correction": False,
