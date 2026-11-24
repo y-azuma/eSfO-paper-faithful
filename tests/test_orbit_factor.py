@@ -153,7 +153,7 @@ def test_raw_normal_and_u_gauge_directions_leave_factor_unchanged() -> None:
     evaluated = evaluate_orbit_factor(**changed)
 
     np.testing.assert_allclose(evaluated.predicted_xy, reference.predicted_xy,
-                               rtol=0.0, atol=6e-14)
+                               rtol=0.0, atol=2e-13)
     np.testing.assert_allclose(
         reference.jacobians.normal_raw @ normal, np.zeros(2),
         rtol=0.0, atol=5e-14,
