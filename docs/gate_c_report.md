@@ -124,14 +124,14 @@ On 2026-11-24, Python 3.10.6 with `numpy==1.26.4`, `scipy==1.13.0`, and
   NumPy deprecation;
 - successful `compileall`, `pip check`, and `git diff --check`.
 
-Before B1-prime/C1, intermediate implementation commit
-`1bccdd693dcdf229a0db03825ff04b03e8b3a505` passed GitHub Actions run
-`45368753199` on Ubuntu 24.04 / Python 3.10.14. That evidence established the
-core but is not the final corrected Gate C result. The corrected implementation
-must pass the same pinned CI before focused re-review; its authoritative
-commit and run are recorded in the decision log after completion. A previous
-CPU-only rerun on the 4070 workstation is historical corroboration and is not
-relied on for the corrected result.
+The corrected implementation commit
+`6640dad46f51825fa311b72d44aceccc4bf0e673` passed GitHub Actions run
+`45372999990`, job `138371780290`, on Ubuntu 24.04 / Python 3.10.14 with all
+`139` tests. This is the authoritative B1-prime/C1 evidence submitted for
+focused re-review. Earlier commit `1bccdd6` and run `45368753199` establish
+only the pre-correction core. A previous CPU-only rerun on the 4070
+workstation is historical corroboration and is not relied on for the corrected
+result.
 
 Claude Code independently re-derived all seven Jacobian blocks (maximum
 relative discrepancy `6.5e-10`), reproduced nullity ten, and recovered a

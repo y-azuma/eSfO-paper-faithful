@@ -9,8 +9,8 @@ update to the decision log.
 
 | ID | Finding | Current state | Required closure |
 |---|---|---|---|
-| B1-prime | The temporal-sign chord was referenced to the sample centroid, which can lie on the wrong side of a sparse chord. | Implemented locally: fit the circle before choosing the plane-normal sign and use `q_k=(I-nn^T)(C_k-c^w)`; deterministic sparse-view and transformed-view fixtures pass. | Successful pinned CI and focused Claude Code confirmation before integrated Gate D evidence. |
-| C1 | Raising on a non-positive trial depth aborts the complete GTSAM LM call. | Implemented locally: preserve the factor and return GTSAM 4.2's default `(2*fx,2*fx)` residual with zero Jacobians; record initial/final counts. | Successful pinned CI and focused Claude Code confirmation before integrated Gate D evidence. |
+| B1-prime | The temporal-sign chord was referenced to the sample centroid, which can lie on the wrong side of a sparse chord. | Implemented: fit the circle before choosing the plane-normal sign and use `q_k=(I-nn^T)(C_k-c^w)`; deterministic sparse-view and transformed-view fixtures and Ubuntu CI run `45372999990` pass. | Focused Claude Code confirmation before integrated Gate D evidence. |
+| C1 | Raising on a non-positive trial depth aborts the complete GTSAM LM call. | Implemented: preserve the factor and return GTSAM 4.2's default `(2*fx,2*fx)` residual with zero Jacobians; record initial/final counts; real negative-depth LM-trial fixture and Ubuntu CI run `45372999990` pass. | Focused Claude Code confirmation before integrated Gate D evidence. |
 
 ## Non-blocking items required before public-data execution
 
