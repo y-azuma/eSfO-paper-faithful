@@ -84,13 +84,16 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    initialization fails explicitly.
 
    This sampled-chord sign rule has a Nyquist precondition that the paper does
-   not state: every adjacent **registered** view must advance by less than
-   `pi` radians at the positive FFT frequency.  A larger gap can make forward
-   motion indistinguishable from the opposite direction.  Once the frequency
-   estimate is available, the reference initializer therefore fails with
-   `temporal_sign_aliased` if any
-   `2*pi*f*(t_{k+1}-t_k) >= pi`; it does not choose a sign from reconstruction
-   quality.
+   not state.  Once the positive FFT frequency is available, form
+   `Delta theta_k = 2*pi*f*(t_{k+1}-t_k)` for every adjacent **registered**
+   pair and compute the score and its tolerance using only pairs with
+   `Delta theta_k < pi`.  A larger gap can make that pair's forward motion
+   indistinguishable from the opposite direction, so it is excluded rather
+   than allowed to vote on the sign.  The reference initializer fails with
+   `temporal_sign_aliased` only if no non-aliased pair remains; it fails with
+   `temporal_sign_unobservable` if the retained score is numerically zero. It
+   records the total, retained, and excluded pair counts and the maximum phase
+   gap.  It does not choose pairs from reconstruction quality.
 
 3. Construct `A = Rod(n,z)`, the active rotation mapping `n` to
    `z=(0,0,1)`.  For neither-parallel case use
@@ -170,8 +173,10 @@ make failure decisions reproducible; they are not fitted method parameters.
   `SO(3)`.
 - Registered-view times must be strictly increasing. Duplicate timestamps are
   a reference-path failure rather than an unstated view-ID tie rule.
-- The temporal sign is accepted only when every positive-frequency phase gap
-  between adjacent registered views is strictly less than `pi`. This is an
+- The temporal-sign score and tolerance use only adjacent registered-view
+  pairs whose positive-frequency phase gap is strictly less than `pi`.
+  Excluded-pair count and maximum phase gap are recorded.  If no such pair
+  remains, temporal direction is rejected as aliased. This is an
   identifiability guard on the sampled-chord rule, not a fitted threshold.
 - The chordal `R_0` mean is unobservable when its smallest singular value is
   no larger than `eps*3*sigma_max`. If the determinant correction is negative,
@@ -288,6 +293,100 @@ orbit equations can still represent and report a negative optimized
 frequency. Every `theta_k` here uses the same frozen `t_ref=t_{k*}`. A geodesic
 mean or a look-at initialization is **Sensitivity only**.
 
+### Frozen factor-observation scope
+
+Let `O` contain every fixed-undistorted Eq. (4) observation emitted by the
+front end, and let `M` be the selected COLMAP model's bijective mapping from a
+source track to an initialized 3-D point.  The reference factor set is
+
+```text
+F = {(p, k, z_p,k) in O : p is in domain(M)}.
+```
+
+Factors are ordered by `(track_id, window_index)`.  Membership in the set of
+registered COLMAP views is used to initialize the orbit geometry, but does
+not filter `F`: the analytic orbit gives a camera pose for every observation
+time.  Likewise, an original Eq. (4) observation for an accepted source track
+remains in `F` when that image feature is absent from the selected COLMAP
+point track.  Geometric verification and reconstruction initialize the
+point; they do not rewrite the measured source track.
+
+An empty track/window pair has no Eq. (4) measurement and therefore no
+factor. Split, merged, and uninitialized source tracks have no unique point
+initialization and are excluded as whole tracks.  Factor membership is fixed
+before optimization and cannot depend on residual, depth, ground truth, or
+scene outcome. All measurements use the same fixed undistortion and camera
+matrix as COLMAP input.
+
+This rule is an **Ambiguous / Frozen interpretation** of Eq. (5)'s schematic
+double sum, Fig. 4, and Sec. 5.2's instruction to project points to cameras
+where they are visible. It is not claimed to reproduce unpublished author
+code. A COLMAP-inlier-only factor graph is a sensitivity variant.
+
+### Frozen direct-factor coordinates and residual
+
+Each observation contributes one two-dimensional residual with the variable
+blocks ordered as
+
+```text
+(x_p, c, r, f, R_0, n_raw, u_raw).
+```
+
+The point `x_p`, centre `c`, raw normal `n_raw`, and raw in-plane direction
+`u_raw` use additive Euclidean coordinates; `r` and `f` are unconstrained
+real scalars; and `R_0` uses the GTSAM `Rot3` right-local perturbation
+`R_0 Exp(delta)`. Inside every factor, form
+
+```text
+n = n_raw / ||n_raw||
+u = normalize((I - n n^T) u_raw)
+v = n x u
+B = [u v n].
+```
+
+Zero `n_raw`, or a projected `u_raw` whose norm is at most
+`64*eps*max(1,||u_raw||)`, is a factor-evaluation failure. The camera pose is
+the frozen orbit pose above. With the fixed zero-skew `PINHOLE` calibration,
+the residual is
+
+```text
+e_p,k = project(K, R_cw(t_k) (x_p - C_w(t_k))) - z_p,k.
+```
+
+Thus the sign is predicted minus observed. A non-positive camera depth is a
+reported reference-path failure; it does not permit removing that factor.
+Negative optimized `r` or `f` values are evaluated and reported rather than
+hidden with a positivity transform. Every factor uses isotropic
+`sigma=1 px`, squared Gaussian error, no robust loss, and no prior.
+
+### Frozen derivative and gauge conventions
+
+The direct GTSAM factor supplies analytic Jacobians for all seven blocks in
+the order above. Central finite differences use
+
+```text
+h_i = eps_float64^(1/3) * max(1, |value_i|)
+```
+
+for additive coordinates and `h_R=eps_float64^(1/3)` radians for each
+right-local `Rot3` coordinate. On the deterministic nondegenerate Gate C
+fixture, each analytic block must agree with its central difference under
+`atol=2e-7` and `rtol=2e-7`. These rules were fixed from float64
+roundoff/truncation balance on synthetic geometry before public-data
+execution; they are not TOPSPIN-tuned tolerances.
+
+The reprojection system is not expected to identify one raw parameter vector.
+Its continuous gauge contains the global similarity transform (three
+translations, three rotations, and one scale), the magnitude of `n_raw`, the
+magnitude of the projected `u_raw`, and the component of `u_raw` parallel to
+`n_raw`: ten local null directions in total. The discrete
+`(n,f)->(-n,-f)` representation is additionally projection-equivalent after
+the corresponding `R_0` basis update. Gate C synthetic recovery therefore
+judges final residuals and Sim(3)-aligned geometry, records Jacobian rank and
+the known null directions, and does not add a gauge-fixing prior. If default
+GTSAM 4.2 Levenberg--Marquardt raises an indeterminate-system exception, the
+reference run fails without retrying another solver.
+
 ## Required pre-data tests
 
 All tests below use synthetic inputs and must pass before a TOPSPIN scene is
@@ -330,6 +429,11 @@ projections.
   must agree.
 - A noise-free point visible at multiple analytic poses must have zero
   reprojection residual at the generating parameters.
+- A mapped source track must contribute all original Eq. (4) observations in
+  deterministic order, including observations in an unregistered logical
+  window and observations absent from the selected COLMAP point track.
+- Empty track/window pairs and non-bijective or uninitialized tracks must not
+  contribute factors; factor counts must not depend on synthetic residuals.
 
 ### Gauge and sign tests
 

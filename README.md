@@ -5,14 +5,17 @@ Latif, Park, and Chin, CVPR 2024).
 
 ## Status
 
-**Gate B: initialization components.** Gate A was mutually approved after
+**Gate C: direct orbit factor and gauge-aware synthetic recovery.** Gate A was mutually approved after
 independent Codex/Claude Code review, including synthetic differential eFAST
 validation. The phase-origin convention and non-blocking audit details were
-frozen before Gate B. The Sec. 4 front end and local Gate B components are
-implemented and tested only on synthetic fixtures; no public-TOPSPIN
+frozen before Gate B. The Sec. 4 front end, Gate B initialization, and local
+Gate C direct-GTSAM factor are implemented and tested only on synthetic
+fixtures; no public-TOPSPIN
 performance result is accepted as a paper reproduction result. The pinned
 COLMAP 3.9.1 sidecar passed the preregistered two-run synthetic integration;
-independent Gate B review remains pending.
+Claude Code conditionally approved Gate B, its sole blocking temporal-sign
+finding has been corrected, and Gate C implementation now awaits independent
+cross-review.
 The authors' paper-listed code URL and the supplementary material referenced
 by the paper are currently unavailable.
 
@@ -35,6 +38,7 @@ The governing documents are:
 - [`docs/geometry_conventions.md`](docs/geometry_conventions.md)
 - [`docs/gate_a_report.md`](docs/gate_a_report.md)
 - [`docs/gate_b_report.md`](docs/gate_b_report.md)
+- [`docs/gate_c_report.md`](docs/gate_c_report.md)
 
 No interpretation may be changed because it improves TOPSPIN performance.
 

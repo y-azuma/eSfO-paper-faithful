@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  gate-a:
+  synthetic-reference:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Install frozen build stack, reference, and tests
         run: |
           python -m pip install pip==24.0 setuptools==69.5.1 wheel==0.43.0 Cython==0.29.37 numpy==1.26.4
-          python -m pip install --no-build-isolation -e '.[test]'
+          python -m pip install --no-build-isolation -e '.[test,gtsam]'
           python -m pip check
       - name: Run synthetic suite
         run: python -m pytest --cov=esfo --cov-report=term-missing

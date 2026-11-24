@@ -54,11 +54,20 @@ optimize the method.
 - If direct GTSAM reports an indeterminate/singular linear system, count a
   reference-path failure. Do not add a prior or change solver/variables as a
   recovery action.
+- Before orbit optimization, freeze and record the D-009 factor set: total
+  factors; factors in registered and unregistered logical windows; factors
+  present and absent from selected-model point tracks; missing track/window
+  pairs; and split, merged, or uninitialized tracks excluded for lack of a
+  unique point initialization. Record exclusion categories independently
+  because split and merged categories can overlap. Do not prune by residual,
+  depth, or outcome.
 
 ## Permitted public-TOPSPIN outputs
 
 - processing success/failure and failure reason;
 - corner, cluster, track, registered-camera, and reconstructed-point counts;
+- orbit-factor counts with the D-009 registered/unregistered,
+  selected-track present/absent, and excluded-track breakdowns;
 - internal reprojection residuals before and after orbit refinement;
 - circular-trajectory diagnostics;
 - within-category frequency consistency, explicitly not accuracy;

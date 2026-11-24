@@ -1,6 +1,7 @@
 # Paper-faithful reproduction decision log
 
-Status: **Gate A mutually approved; Gate B may proceed**
+Status: **Gate A mutually approved; Gate B conditionally approved with B1
+corrected; Gate C local verification complete and cross-review pending**
 Scope: eSfO reproduction, not a method-improvement project.
 
 ## D-001 - Reproduction boundary
@@ -83,8 +84,12 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    locations with each
    scene's `calib.txt`, then use one fixed known `PINHOLE` camera. Insert
    correspondences for every pair of windows observing the same track, run
-   COLMAP's default geometric verification and incremental mapper, keep the
-   largest model, and exclude unregistered windows/tracks from later stages.
+   COLMAP's default geometric verification and incremental mapper, and keep
+   the largest model. Use only its registered camera poses and bijectively
+   initialized source tracks for the plane/circle/`u`/`R0` initialization.
+   Unregistered windows do not by themselves remove an existing Eq. (4)
+   observation from the later orbit factor graph; the separate, frozen
+   factor-observation rule is D-009.
    Use the original `K` as the new camera matrix after undistortion and set
    `ba_refine_focal_length=false`, `ba_refine_principal_point=false`, and
    `ba_refine_extra_params=false`. Record every effective option and failure.
@@ -219,14 +224,85 @@ forbidden.
   because it bypasses verification. The mapper uses an empty image directory
   with `Mapper.extract_colors=0`, since no intensity image is part of an event
   window, and all three intrinsic-refinement switches remain false.
-- The temporal normal-sign rule is sampled from registered camera centres.
-  After the positive FFT frequency is available, any adjacent registered-view
-  phase gap of at least `pi` is rejected as `temporal_sign_aliased`; otherwise
-  an aliased direction could be hidden by the later `R_0` initialization.
+- The temporal normal-sign rule is sampled from registered camera centres
+  after the positive FFT frequency is available. Adjacent registered-view
+  pairs with a phase gap of at least `pi` are excluded from the score and
+  counted; the maximum gap is recorded. The initialization fails as
+  `temporal_sign_aliased` only when no non-aliased pair remains, and fails as
+  `temporal_sign_unobservable` when the retained score is numerically zero.
+  This is a result-independent identifiability rule and not a quality-based
+  pair selection.
 
 These choices were made from versioned source behavior, algebra, and synthetic
 identifiability before TOPSPIN execution. They may be changed only for a
 reproducible code defect or stronger primary evidence, never for performance.
+
+## D-009 - Gate C factor-observation scope frozen after Gate B review
+
+The paper states that every Eq. (4) feature observation is connected to the
+global orbit parameters and its 3-D point, and that points are projected to
+cameras where they are visible. Its Eq. (5) double sum is schematic: Eq. (4)
+does not define a measurement for an empty track/window pair. Before Gate C
+implementation and without inspecting TOPSPIN performance, freeze the
+executable observation set as follows.
+
+- Let `O` be the original, fixed-undistorted Eq. (4) observations and let `M`
+  be the bijective source-track-to-COLMAP-point initialization from the
+  selected model. Create exactly one orbit factor for each observation in
+  `O` whose source track lies in the domain of `M`, ordered by
+  `(track_id, window_index)`.
+- For a track in `M`, retain every one of its original Eq. (4) observations,
+  including observations in logical windows that COLMAP did not register and
+  observations not retained in the selected model's `points3D` track. The
+  orbit model defines a pose at every `t_k`; COLMAP registration and geometric
+  verification initialize the model but do not redefine the measured track.
+- Do not fabricate a factor for an empty track/window pair. Exclude an entire
+  split, merged, or uninitialized source track because it lacks a unique 3-D
+  point initialization. Do not prune factors by reprojection residual, depth,
+  ground truth, scene outcome, or public-data performance.
+- Use the same fixed undistortion and `K` convention used for COLMAP input.
+  Record total factors, factors in registered and unregistered windows,
+  factors present and absent in the selected COLMAP point tracks, missing
+  track/window pairs, and every excluded-track category. Split, merged, and
+  uninitialized categories are recorded independently and are not forced to
+  be disjoint.
+
+This is an **Ambiguous / Frozen interpretation**, not a claim about the
+authors' unpublished implementation. It is the most literal reconciliation
+of Sec. 4.3, Eq. (5), Fig. 4, and Sec. 5.2's phrase "cameras where they are
+visible". A COLMAP-inlier-only graph is a separately labelled sensitivity
+variant and cannot replace the reference path based on its result.
+
+## D-010 - Gate C local coordinates, derivatives, and gauge
+
+Before any public-data optimization, freeze the direct-factor convention as
+follows.
+
+- Residual order is predicted fixed-PINHOLE pixel minus the undistorted Eq.
+  (4) observation. Variable/key order is point, `c`, `r`, `f`, `R0`, raw `n`,
+  raw `u`.
+- Point, `c`, raw `n`, and raw `u` use additive `R^3` coordinates; `r` and
+  `f` are additive real scalars; `R0` uses GTSAM `Rot3` right-local
+  coordinates. Each factor normalizes raw `n` and projects then normalizes raw
+  `u` before constructing `v=n cross u`.
+- Supply analytic Jacobians. Compare them with central differences using
+  `eps_float64^(1/3)*max(1,abs(value))` for additive coordinates and
+  `eps_float64^(1/3)` radians for each right-local rotation coordinate. The
+  preregistered synthetic tolerance is `atol=rtol=2e-7`.
+- A non-positive depth or degenerate normalized basis is a reported factor
+  failure, never permission to prune an observation. Run default GTSAM 4.2
+  Levenberg--Marquardt once, without priors, robust loss, solver fallback, or
+  retry.
+- Judge synthetic recovery by reprojection and one joint proper-Sim(3)
+  alignment of reconstructed points and orbit centres, not raw parameter
+  equality. Record the ten expected continuous null directions: global
+  translation (3), rotation (3), scale (1), raw-normal magnitude (1),
+  projected raw-`u` magnitude (1), and the raw-`u` component parallel to the
+  raw normal (1).
+
+These rules are implementation conventions required by omissions in the
+paper. They were fixed from algebra and deterministic synthetic geometry,
+without TOPSPIN execution or performance-based selection.
 
 ## Change log
 
@@ -238,4 +314,7 @@ reproducible code defect or stronger primary evidence, never for performance.
 | 2026-11-24 | Gate A audit exposed an unstated SAE-initialization convention. Negative infinity was frozen because relative time starts at zero and every unseen cell must be older than every observed event. No TOPSPIN or other performance result was run or used; cross-review remains pending. | Static comparison with cited eFAST revision; synthetic time-shift and initialization fixtures | Codex; Claude Code review pending |
 | 2026-11-24 | Gate A approved with no blocking findings and Gate B authorized. Negative-infinity SAE initialization was mutually accepted after an independent differential check reported zero disagreements on 171,761 synthetic events. The literal time equation was changed from multiplication to division to remove a one-ulp implementation/documentation mismatch; no public data was used. | Claude Code review of `d57e63f` and `dffc27b`; local synthetic regression tests | Claude Code and Codex |
 | 2026-11-24 | Gate B implementation and exact COLMAP 3.9.1 two-run synthetic integration completed. Parser/configuration guards and the temporal-sign alias failure were added from result-independent audits; no TOPSPIN scene or performance result was used. Gate B remains unapproved until independent review. | 107 synthetic unit tests; `artifacts/gate_b/colmap_synthetic/manifest.json` | Codex implementation; Claude Code review pending |
+| 2026-11-24 | Gate B review exposed an ambiguous factor-observation scope. Before Gate C and without public-data execution, D-009 froze the literal Eq. (4) observation set for every bijectively initialized track; COLMAP registration is used for initialization, not residual-based observation selection. | Sec. 4.3 Eq. (4), Sec. 5.1 Eq. (5), Sec. 5.2 and Fig. 4; Claude Code Gate B review | Codex interpretation; Claude Code confirmation pending |
+| 2026-11-24 | Gate B received conditional approval. The sole blocking finding B1 was addressed by excluding only FFT-phase-aliased adjacent registered-view pairs from the temporal-sign score, failing only when none remain or the retained score is unobservable, and recording exclusion diagnostics. | Claude Code Gate B review; focused synthetic fixtures | Claude Code finding; Codex implementation; re-review pending |
+| 2026-11-24 | Gate C factor coordinates, residual sign, finite-difference rule, and ten-dimensional gauge were frozen before public-data execution. | Orbit algebra; GTSAM 4.2 local-coordinate API; deterministic synthetic rank analysis | Codex implementation; Claude Code review pending |
 

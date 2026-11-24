@@ -518,6 +518,9 @@ def test_track_point_mapping_excludes_merges_splits_and_uninitialized_tracks() -
     assert mapping.unique_pairs == ((10, 100),)
     assert mapping.merged_point_ids == (200,)
     assert mapping.split_track_ids == (20,)
+    # Track 20 is both split across points 200/201 and participates in merged
+    # point 200.  The diagnostic categories intentionally overlap.
+    assert mapping.merged_track_ids == (20, 30)
     assert mapping.uninitialized_track_ids == ()
     assert mapping.excluded_track_ids == (20, 30)
 
@@ -577,8 +580,15 @@ def test_binary_model_discovery_and_text_model_extraction(tmp_path: Path) -> Non
     np.testing.assert_array_equal(extracted.mapped_point_ids, [100, 200, 300])
     np.testing.assert_allclose(extracted.mapped_points_w,
                                [[0, 0, 5], [1, 0, 5], [0, 1, 5]])
+    assert extracted.point_observations == {
+        100: ((1, 0), (2, 0), (3, 0)),
+        200: ((1, 1), (3, 1)),
+        300: ((2, 1), (3, 2)),
+    }
     assert extracted.unregistered_window_indices == (4,)
     assert not extracted.mapped_points_w.flags.writeable
+    with pytest.raises(TypeError):
+        extracted.point_observations[100] = ((1, 0),)  # type: ignore[index]
 
     # Counts alone cannot bind a converted model to its binary-model summary.
     # The text directory leaf is the canonical source model ID.

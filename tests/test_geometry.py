@@ -66,7 +66,7 @@ def _exact_orbit() -> tuple[
 def test_exact_non_axis_orbit_recovers_geometry_r0_and_poses() -> None:
     trajectory, center, radius, normal, expected_r0, frequency = _exact_orbit()
 
-    geometry = fit_orbit_geometry(trajectory)
+    geometry = fit_orbit_geometry(trajectory, frequency)
     initialized_r0 = initialize_r0(trajectory, geometry, frequency)
     predicted = orbit_poses(
         geometry, frequency, initialized_r0.rotation, trajectory.time_s,
@@ -92,7 +92,7 @@ def test_exact_non_axis_orbit_recovers_geometry_r0_and_poses() -> None:
 
 def test_orbit_centres_are_correct_at_zero_quarter_and_half_period() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
+    geometry = fit_orbit_geometry(trajectory, frequency)
     times = geometry.t_ref_s + np.asarray([
         0.0, 1.0 / (4.0 * frequency), 1.0 / (2.0 * frequency),
     ])
@@ -109,7 +109,7 @@ def test_orbit_centres_are_correct_at_zero_quarter_and_half_period() -> None:
 
 def test_common_absolute_time_shift_leaves_initialization_and_poses_unchanged() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
+    geometry = fit_orbit_geometry(trajectory, frequency)
     r0 = initialize_r0(trajectory, geometry, frequency).rotation
     original = orbit_poses(geometry, frequency, r0, trajectory.time_s)
     shift = 1234.5
@@ -117,7 +117,7 @@ def test_common_absolute_time_shift_leaves_initialization_and_poses_unchanged() 
         trajectory.view_ids, trajectory.time_s + shift,
         trajectory.R_cw, trajectory.t_cw,
     )
-    shifted_geometry = fit_orbit_geometry(shifted_trajectory)
+    shifted_geometry = fit_orbit_geometry(shifted_trajectory, frequency)
     shifted_r0 = initialize_r0(
         shifted_trajectory, shifted_geometry, frequency,
     ).rotation
@@ -136,7 +136,7 @@ def test_common_absolute_time_shift_leaves_initialization_and_poses_unchanged() 
 
 def test_exact_nondegenerate_global_frame_change_is_equivariant() -> None:
     trajectory, center, radius, normal, _, frequency = _exact_orbit()
-    original_geometry = fit_orbit_geometry(trajectory)
+    original_geometry = fit_orbit_geometry(trajectory, frequency)
     original_r0 = initialize_r0(
         trajectory, original_geometry, frequency,
     ).rotation
@@ -156,7 +156,9 @@ def test_exact_nondegenerate_global_frame_change_is_equivariant() -> None:
         transformed_rotations, transformed_translations,
     )
 
-    transformed_geometry = fit_orbit_geometry(transformed_trajectory)
+    transformed_geometry = fit_orbit_geometry(
+        transformed_trajectory, frequency,
+    )
     transformed_r0 = initialize_r0(
         transformed_trajectory, transformed_geometry, frequency,
     ).rotation
@@ -222,8 +224,10 @@ def test_rodrigues_parallel_threshold_is_exercised_on_both_sides() -> None:
 
 
 def test_temporal_sign_is_canonical_and_unobservable_motion_fails() -> None:
-    trajectory, _, _, normal, _, _ = _exact_orbit()
-    fitted = fit_orbit_plane(trajectory.centers_w, trajectory.time_s)
+    trajectory, _, _, normal, _, frequency = _exact_orbit()
+    fitted = fit_orbit_plane(
+        trajectory.centers_w, trajectory.time_s, frequency,
+    )
     assert fitted.temporal_score > fitted.temporal_tolerance
     np.testing.assert_allclose(fitted.normal_w, normal, rtol=0.0, atol=2e-14)
 
@@ -231,23 +235,57 @@ def test_temporal_sign_is_canonical_and_unobservable_motion_fails() -> None:
                          math.pi / 2.0, 0.0])
     centers = np.column_stack((np.cos(angles), np.sin(angles), np.zeros(5)))
     with pytest.raises(GeometryInitializationError) as captured:
-        fit_orbit_plane(centers, np.arange(5, dtype=np.float64))
+        fit_orbit_plane(centers, np.arange(5, dtype=np.float64), 0.1)
     assert captured.value.code == "temporal_sign_unobservable"
 
 
-def test_r0_initialization_rejects_temporally_aliased_registered_views() -> None:
+def test_temporal_sign_uses_only_nonaliased_registered_view_pairs() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
-    # Preserve valid poses but retain a sparse set for which at least one
-    # adjacent registered-view phase advance is >= pi.
+    sign_frequency = 2.25 * frequency
+
+    geometry = fit_orbit_geometry(trajectory, sign_frequency)
+
+    diagnostics = geometry.plane_diagnostics
+    assert diagnostics.temporal_total_pair_count == 6
+    assert diagnostics.temporal_eligible_pair_count == 5
+    assert diagnostics.temporal_excluded_pair_count == 1
+    assert diagnostics.temporal_max_phase_gap_rad == pytest.approx(3.5325)
+
+
+def test_temporal_sign_fails_only_when_no_nonaliased_pair_exists() -> None:
+    trajectory, _, _, _, _, frequency = _exact_orbit()
+
+    with pytest.raises(GeometryInitializationError) as captured:
+        fit_orbit_geometry(trajectory, 10.0 * frequency)
+    assert captured.value.code == "temporal_sign_aliased"
+
+
+def test_r0_requires_the_frequency_used_for_temporal_sign() -> None:
+    trajectory, _, _, _, _, frequency = _exact_orbit()
+    geometry = fit_orbit_geometry(trajectory, frequency)
+
+    with pytest.raises(ValueError, match="temporal-sign"):
+        initialize_r0(
+            trajectory, geometry, np.nextafter(frequency, math.inf),
+        )
+
+
+def test_r0_accepts_sparse_views_after_sign_was_identified() -> None:
+    trajectory, _, _, _, _, frequency = _exact_orbit()
+    geometry = fit_orbit_geometry(trajectory, frequency)
     indices = np.asarray([0, 5, 6])
     sparse = RegisteredTrajectory(
         trajectory.view_ids[indices], trajectory.time_s[indices],
         trajectory.R_cw[indices], trajectory.t_cw[indices],
     )
-    with pytest.raises(GeometryInitializationError) as captured:
-        initialize_r0(sparse, geometry, frequency)
-    assert captured.value.code == "temporal_sign_aliased"
+
+    initialized = initialize_r0(sparse, geometry, frequency)
+
+    np.testing.assert_allclose(
+        initialized.rotation,
+        initialize_r0(trajectory, geometry, frequency).rotation,
+        rtol=0.0, atol=3e-14,
+    )
 
 
 def test_vertical_or_collinear_plane_fails_instead_of_switching_to_tls() -> None:
@@ -256,7 +294,7 @@ def test_vertical_or_collinear_plane_fails_instead_of_switching_to_tls() -> None
         [0.0, 3.0, -1.0],
     ])
     with pytest.raises(GeometryInitializationError) as captured:
-        fit_orbit_plane(centers, np.arange(4, dtype=np.float64))
+        fit_orbit_plane(centers, np.arange(4, dtype=np.float64), 0.1)
     assert captured.value.code == "plane_rank_deficient"
 
 
@@ -271,7 +309,7 @@ def test_earliest_view_at_fitted_circle_center_fails_radial_initialization() -> 
         rotations, -centers,
     )
     with pytest.raises(GeometryInitializationError) as captured:
-        fit_orbit_geometry(trajectory)
+        fit_orbit_geometry(trajectory, 0.1)
     assert captured.value.code == "radial_direction_unobservable"
 
 
@@ -289,7 +327,7 @@ def test_circle_radius_squared_roundoff_clamps_or_fails_by_frozen_tolerance() ->
 
 def test_pose_center_relative_rotation_and_projection_invariants() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
+    geometry = fit_orbit_geometry(trajectory, frequency)
     r0 = initialize_r0(trajectory, geometry, frequency).rotation
     times = geometry.t_ref_s + np.asarray([0.17, 0.83])
     poses = orbit_poses(geometry, frequency, r0, times)
@@ -324,7 +362,7 @@ def test_pose_center_relative_rotation_and_projection_invariants() -> None:
 
 def test_sign_equivalent_orbit_representation_is_algebraically_identical() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
+    geometry = fit_orbit_geometry(trajectory, frequency)
     r0 = initialize_r0(trajectory, geometry, frequency).rotation
     times = geometry.t_ref_s + np.asarray([0.0, 0.31, 0.92])
     canonical = orbit_poses(geometry, frequency, r0, times)
@@ -358,6 +396,7 @@ def _geometry_with_identity_basis() -> OrbitGeometryInitialization:
     plane = PlaneFit(
         np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
         np.asarray([0.0, 0.0, 1.0]), 3, 1.0, 1.0, 0.0,
+        0.125, 2, 2, 0, math.pi / 4.0,
     )
     return OrbitGeometryInitialization(
         np.zeros(3), 1.0, np.asarray([0.0, 0.0, 1.0]),
@@ -426,8 +465,8 @@ def test_full_rank_reflection_mean_with_tied_smallest_values_fails_closed() -> N
 
 
 def test_reference_r0_initialization_requires_positive_numeric_frequency() -> None:
-    trajectory, _, _, _, _, _ = _exact_orbit()
-    geometry = fit_orbit_geometry(trajectory)
+    trajectory, _, _, _, _, frequency = _exact_orbit()
+    geometry = fit_orbit_geometry(trajectory, frequency)
     for value in (0.0, -0.5, "0.4"):
         with pytest.raises(ValueError, match="frequency"):
             initialize_r0(trajectory, geometry, value)  # type: ignore[arg-type]
@@ -452,6 +491,7 @@ def test_geometry_result_rejects_inconsistent_alignment_and_deep_freezes_metadat
     tilted_plane = PlaneFit(
         np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
         tilted, 3, 1.0, 1.0, 0.0,
+        0.125, 2, 2, 0, math.pi / 4.0,
     )
     with pytest.raises(ValueError, match="plane_to_xy"):
         OrbitGeometryInitialization(

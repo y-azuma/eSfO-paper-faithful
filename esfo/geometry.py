@@ -143,6 +143,11 @@ class PlaneFit:
     condition_number: float
     temporal_score: float
     temporal_tolerance: float
+    temporal_frequency_hz: float
+    temporal_total_pair_count: int
+    temporal_eligible_pair_count: int
+    temporal_excluded_pair_count: int
+    temporal_max_phase_gap_rad: float
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "centroid_w", _finite_array(
@@ -161,12 +166,45 @@ class PlaneFit:
         condition = _finite_scalar("condition_number", self.condition_number)
         score = _finite_scalar("temporal_score", self.temporal_score)
         tolerance = _finite_scalar("temporal_tolerance", self.temporal_tolerance)
+        frequency = _finite_scalar(
+            "temporal_frequency_hz", self.temporal_frequency_hz,
+        )
+        max_phase_gap = _finite_scalar(
+            "temporal_max_phase_gap_rad", self.temporal_max_phase_gap_rad,
+        )
+        counts: dict[str, int] = {}
+        for name, value in (
+            ("temporal_total_pair_count", self.temporal_total_pair_count),
+            ("temporal_eligible_pair_count", self.temporal_eligible_pair_count),
+            ("temporal_excluded_pair_count", self.temporal_excluded_pair_count),
+        ):
+            if (isinstance(value, bool)
+                    or not isinstance(value, (int, np.integer))):
+                raise ValueError(f"{name} must be an integer")
+            counts[name] = int(value)
         if condition < 1.0 or tolerance < 0.0 or score <= tolerance:
             raise ValueError("plane diagnostics are inconsistent")
+        if frequency <= 0.0 or max_phase_gap <= 0.0:
+            raise ValueError("temporal frequency and maximum phase gap must be positive")
+        if (counts["temporal_total_pair_count"] <= 0
+                or counts["temporal_eligible_pair_count"] <= 0
+                or counts["temporal_excluded_pair_count"] < 0
+                or counts["temporal_eligible_pair_count"]
+                + counts["temporal_excluded_pair_count"]
+                != counts["temporal_total_pair_count"]):
+            raise ValueError("temporal pair diagnostics are inconsistent")
         object.__setattr__(self, "design_rank", int(self.design_rank))
         object.__setattr__(self, "condition_number", condition)
         object.__setattr__(self, "temporal_score", score)
         object.__setattr__(self, "temporal_tolerance", tolerance)
+        object.__setattr__(self, "temporal_frequency_hz", frequency)
+        object.__setattr__(self, "temporal_total_pair_count",
+                           counts["temporal_total_pair_count"])
+        object.__setattr__(self, "temporal_eligible_pair_count",
+                           counts["temporal_eligible_pair_count"])
+        object.__setattr__(self, "temporal_excluded_pair_count",
+                           counts["temporal_excluded_pair_count"])
+        object.__setattr__(self, "temporal_max_phase_gap_rad", max_phase_gap)
 
 
 @dataclass(frozen=True)
@@ -335,11 +373,18 @@ class AnalyticOrbitPoses:
         object.__setattr__(self, "t_cw", translations)
 
 
-def fit_orbit_plane(centers_w: Any, time_s: Any) -> PlaneFit:
+def fit_orbit_plane(
+    centers_w: Any,
+    time_s: Any,
+    frequency_hz: float,
+) -> PlaneFit:
     """Fit the paper's ordinary regression and fix its temporal sign."""
 
     centers = _finite_array("centers_w", centers_w, (None, 3))
     times = _finite_array("time_s", time_s, (centers.shape[0],))
+    frequency = _finite_scalar("frequency_hz", frequency_hz)
+    if frequency <= 0.0:
+        raise ValueError("temporal sign initialization requires positive frequency")
     if centers.shape[0] < 3 or np.any(np.diff(times) <= 0.0):
         raise GeometryInitializationError(
             "plane_rank_deficient", "three time-ordered centres are required",
@@ -359,11 +404,22 @@ def fit_orbit_plane(centers_w: Any, time_s: Any) -> PlaneFit:
     normal = np.asarray([coefficients[0], coefficients[1], -1.0])
     normal /= np.linalg.norm(normal)
     projected = centered - np.outer(centered @ normal, normal)
-    cross = np.cross(projected[:-1], projected[1:])
+    phase_gaps = 2.0 * math.pi * frequency * np.diff(times)
+    eligible = phase_gaps < math.pi
+    eligible_count = int(np.count_nonzero(eligible))
+    excluded_count = int(eligible.size - eligible_count)
+    max_phase_gap = float(np.max(phase_gaps))
+    if eligible_count == 0:
+        raise GeometryInitializationError(
+            "temporal_sign_aliased",
+            "no adjacent registered-view pair has phase advance below pi",
+        )
+    left = projected[:-1][eligible]
+    right = projected[1:][eligible]
+    cross = np.cross(left, right)
     score = float(np.sum(cross @ normal, dtype=np.float64))
     scale = float(np.sum(
-        np.linalg.norm(projected[:-1], axis=1)
-        * np.linalg.norm(projected[1:], axis=1),
+        np.linalg.norm(left, axis=1) * np.linalg.norm(right, axis=1),
         dtype=np.float64,
     ))
     tolerance = 64.0 * _EPS * scale
@@ -377,7 +433,8 @@ def fit_orbit_plane(centers_w: Any, time_s: Any) -> PlaneFit:
         score = -score
     return PlaneFit(
         _readonly(centroid), _readonly(coefficients), _readonly(normal),
-        int(rank), _condition_number(design), score, tolerance,
+        int(rank), _condition_number(design), score, tolerance, frequency,
+        int(phase_gaps.size), eligible_count, excluded_count, max_phase_gap,
     )
 
 
@@ -448,11 +505,14 @@ def _checked_circle_radius_squared(
     return center_2d, max(radius_squared, 0.0), tolerance
 
 
-def fit_orbit_geometry(trajectory: RegisteredTrajectory) -> OrbitGeometryInitialization:
+def fit_orbit_geometry(
+    trajectory: RegisteredTrajectory,
+    frequency_hz: float,
+) -> OrbitGeometryInitialization:
     """Apply the frozen Eq. (6)--(8) initialization to registered poses."""
 
     centers = trajectory.centers_w
-    plane = fit_orbit_plane(centers, trajectory.time_s)
+    plane = fit_orbit_plane(centers, trajectory.time_s, frequency_hz)
     alignment = active_align_to_z(plane.normal_w)
     centered = centers - plane.centroid_w
     points_2d = (alignment.rotation @ centered.T).T[:, :2]
@@ -496,6 +556,11 @@ def fit_orbit_geometry(trajectory: RegisteredTrajectory) -> OrbitGeometryInitial
         "plane_fit": "ordinary_z_on_x_y_intercept",
         "plane_lstsq_rcond": rcond,
         "temporal_sign_tolerance": "64*eps*sum(norm(q_k)*norm(q_k+1))",
+        "temporal_sign_frequency_hz": plane.temporal_frequency_hz,
+        "temporal_sign_total_pair_count": plane.temporal_total_pair_count,
+        "temporal_sign_eligible_pair_count": plane.temporal_eligible_pair_count,
+        "temporal_sign_excluded_pair_count": plane.temporal_excluded_pair_count,
+        "temporal_sign_max_phase_gap_rad": plane.temporal_max_phase_gap_rad,
         "alignment_parallel_tolerance": _PARALLEL_TOLERANCE,
         "alignment_branch": alignment.branch,
         "rotation_validation_tolerance": _ROTATION_TOLERANCE,
@@ -580,17 +645,12 @@ def initialize_r0(
     frequency = _finite_scalar("frequency_hz", frequency_hz)
     if frequency <= 0.0:
         raise ValueError("reference R0 initialization requires positive frequency")
-    phase = orbit_phase(trajectory.time_s, frequency, geometry.t_ref_s)
-    # The temporal-normal sign in ``fit_orbit_plane`` is inferred from
-    # consecutive sampled chords. Once a positive frequency estimate is
-    # available, a phase gap of pi or more makes that direction Nyquist-
-    # ambiguous: the same sampled centres admit the opposite rotation sense.
-    # Fail closed instead of letting the chordal R0 mean hide an aliased sign.
-    if np.any(np.diff(phase) >= math.pi):
-        raise GeometryInitializationError(
-            "temporal_sign_aliased",
-            "a registered-view phase gap is at least pi radians",
+    if frequency != geometry.plane_diagnostics.temporal_frequency_hz:
+        raise ValueError(
+            "R0 frequency must equal the frequency used for temporal-sign "
+            "initialization",
         )
+    phase = orbit_phase(trajectory.time_s, frequency, geometry.t_ref_s)
     positive_phase = _rotations_z(phase)
     candidates = np.einsum(
         "kij,jl,klm->kim", trajectory.R_cw, geometry.basis_w, positive_phase,

@@ -887,8 +887,49 @@ class TrackPointMapping:
     unique_pairs: tuple[tuple[int, int], ...]
     split_track_ids: tuple[int, ...]
     merged_point_ids: tuple[int, ...]
+    merged_track_ids: tuple[int, ...]
     uninitialized_track_ids: tuple[int, ...]
     excluded_track_ids: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        pairs = tuple(self.unique_pairs)
+        if any(
+            not isinstance(pair, tuple) or len(pair) != 2
+            or any(isinstance(value, bool) or not isinstance(value, int)
+                   or value < 0 for value in pair)
+            for pair in pairs
+        ):
+            raise ValueError("unique_pairs must contain non-negative integer pairs")
+        if (pairs != tuple(sorted(set(pairs)))
+                or len({pair[0] for pair in pairs}) != len(pairs)
+                or len({pair[1] for pair in pairs}) != len(pairs)):
+            raise ValueError("unique_pairs must be a sorted one-to-one mapping")
+        categories: dict[str, tuple[int, ...]] = {}
+        for name in (
+            "split_track_ids", "merged_point_ids", "merged_track_ids",
+            "uninitialized_track_ids", "excluded_track_ids",
+        ):
+            values = tuple(getattr(self, name))
+            if (any(isinstance(value, bool) or not isinstance(value, int)
+                    or value < 0 for value in values)
+                    or values != tuple(sorted(set(values)))):
+                raise ValueError(f"{name} must be sorted unique non-negative integers")
+            categories[name] = values
+            object.__setattr__(self, name, values)
+        excluded_expected = (
+            set(categories["split_track_ids"])
+            | set(categories["merged_track_ids"])
+            | set(categories["uninitialized_track_ids"])
+        )
+        if set(categories["excluded_track_ids"]) != excluded_expected:
+            raise ValueError("excluded tracks must equal the union of all categories")
+        mapped_track_ids = {pair[0] for pair in pairs}
+        mapped_point_ids = {pair[1] for pair in pairs}
+        if mapped_track_ids & excluded_expected:
+            raise ValueError("a uniquely mapped track cannot also be excluded")
+        if mapped_point_ids & set(categories["merged_point_ids"]):
+            raise ValueError("a uniquely mapped point cannot also be merged")
+        object.__setattr__(self, "unique_pairs", pairs)
 
 
 def validate_track_point_mapping(
@@ -958,7 +999,8 @@ def validate_track_point_mapping(
     uninitialized = tuple(sorted(all_tracks - initialized))
     excluded.update(uninitialized)
     return TrackPointMapping(
-        tuple(pairs), split_tracks, merged_points, uninitialized,
+        tuple(pairs), split_tracks, merged_points,
+        tuple(sorted(merged_tracks)), uninitialized,
         tuple(sorted(excluded)),
     )
 
@@ -1268,6 +1310,7 @@ class ExtractedColmapModel:
     mapped_track_ids: np.ndarray
     mapped_point_ids: np.ndarray
     mapped_points_w: np.ndarray
+    point_observations: Mapping[int, tuple[tuple[int, int], ...]]
     unregistered_window_indices: tuple[int, ...]
     metadata: Mapping[str, Any]
 
@@ -1281,6 +1324,38 @@ class ExtractedColmapModel:
         if (track_ids.size != point_ids.size or track_ids.size != points.shape[0]
                 or not np.all(np.isfinite(points))):
             raise ValueError("mapped point arrays are inconsistent")
+        if not isinstance(self.point_observations, Mapping):
+            raise ValueError("point_observations must be a mapping")
+        point_observations: dict[int, tuple[tuple[int, int], ...]] = {}
+        seen_features: set[tuple[int, int]] = set()
+        for point_id_raw, track_input in sorted(self.point_observations.items()):
+            if (isinstance(point_id_raw, bool)
+                    or not isinstance(point_id_raw, (int, np.integer))
+                    or int(point_id_raw) < 0):
+                raise ValueError("point_observations has an invalid point ID")
+            point_id = int(point_id_raw)
+            track = tuple(track_input)
+            if not track:
+                raise ValueError("point_observations has an empty point track")
+            normalized: list[tuple[int, int]] = []
+            for feature in track:
+                if (not isinstance(feature, tuple) or len(feature) != 2
+                        or any(isinstance(value, bool)
+                               or not isinstance(value, (int, np.integer))
+                               or int(value) < 0 for value in feature)):
+                    raise ValueError(
+                        "point_observations features must be non-negative pairs"
+                    )
+                pair = (int(feature[0]), int(feature[1]))
+                if pair in seen_features:
+                    raise ValueError(
+                        "one image feature belongs to multiple point tracks"
+                    )
+                seen_features.add(pair)
+                normalized.append(pair)
+            point_observations[point_id] = tuple(normalized)
+        if len(point_observations) != self.summary.point3d_count:
+            raise ValueError("point_observations count disagrees with model summary")
         expected_pairs = tuple(
             (int(track_id), int(point_id))
             for track_id, point_id in zip(track_ids, point_ids)
@@ -1289,6 +1364,8 @@ class ExtractedColmapModel:
                 or len(set(expected_pairs)) != len(expected_pairs)
                 or expected_pairs != tuple(sorted(expected_pairs))):
             raise ValueError("mapped arrays disagree with the unique mapping")
+        if any(int(point_id) not in point_observations for point_id in point_ids):
+            raise ValueError("a mapped point lacks its selected-model point track")
         unregistered = tuple(self.unregistered_window_indices)
         if (any(isinstance(value, bool) or not isinstance(value, (int, np.integer))
                 or int(value) <= 0 for value in unregistered)
@@ -1300,6 +1377,9 @@ class ExtractedColmapModel:
         object.__setattr__(self, "mapped_track_ids", track_ids)
         object.__setattr__(self, "mapped_point_ids", point_ids)
         object.__setattr__(self, "mapped_points_w", points)
+        object.__setattr__(self, "point_observations", MappingProxyType(
+            point_observations,
+        ))
         object.__setattr__(self, "unregistered_window_indices",
                            tuple(int(value) for value in unregistered))
         object.__setattr__(self, "metadata", _deep_freeze(self.metadata))
@@ -1362,12 +1442,17 @@ def extract_text_model(
     )
     return ExtractedColmapModel(
         summary, trajectory, mapping, mapped_track_ids, mapped_point_ids,
-        mapped_points, unregistered,
+        mapped_points, observations, unregistered,
         {
             "camera_checked": "fixed_PINHOLE_exact_roundtrip",
             "pose_convention": "world_to_camera_qvec_tvec",
             "model_directory_id": summary.directory_id,
             "track_point_policy": "bijective_only",
+            "mapped_track_count": len(mapping.unique_pairs),
+            "split_track_count": len(mapping.split_track_ids),
+            "merged_point_count": len(mapping.merged_point_ids),
+            "merged_track_count": len(mapping.merged_track_ids),
+            "uninitialized_track_count": len(mapping.uninitialized_track_ids),
         },
     )
 

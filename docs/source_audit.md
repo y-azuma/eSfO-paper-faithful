@@ -118,6 +118,17 @@ remain **Ambiguous**. A custom solver can only be an equivalence-qualified
 alternative on a preregistered deterministic problem; it cannot silently
 replace the reference path.
 
+The printed Eq. (5) sums over all windows and points, while Eq. (4) defines no
+measurement for an empty track/window pair. Sec. 5.2 instead refers to every
+observation and to cameras where a point is visible. The frozen reference
+therefore interprets visibility as the existence of an original Eq. (4)
+observation. For each source track with a unique COLMAP point initialization,
+all such fixed-undistorted observations enter the orbit graph, even when the
+window is unregistered or the feature is absent from the selected COLMAP
+point track. No missing measurement is fabricated, and non-bijective or
+uninitialized tracks are excluded. This remains **Ambiguous**, is frozen
+before Gate C, and cannot be changed based on public-data residuals.
+
 The frozen reference selects GTSAM `4.2`, the latest stable non-RC release
 available before arXiv v1 on 2024-05-10. The same cutoff selects
 `hdbscan==0.8.33` and COLMAP `3.9.1`; none of these choices is evidence of the
