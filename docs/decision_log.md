@@ -1,6 +1,6 @@
 # Paper-faithful reproduction decision log
 
-Status: **Gate 0 revision, addressing Claude Code review of `7e498ee`**
+Status: **Gate 0 conditionally approved; Gate A may proceed**
 Scope: eSfO reproduction, not a method-improvement project.
 
 ## D-001 - Reproduction boundary
@@ -25,7 +25,7 @@ Resolve ambiguities in this order:
 
 Performance is not an admissible tie-break.
 
-## D-003 - Frozen primary interpretations proposed for Gate 0 approval
+## D-003 - Frozen primary interpretations accepted for conditional Gate 0
 
 These are result-independent interpretations. Paper-reported parts and
 inferred parts must remain distinguishable in code, provenance, and reports.
@@ -45,11 +45,15 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    scores and their mean equally. Corner-only neighbors and spatial-only
    distance remain sensitivity variants.
 3. **HDBSCAN.** Use the McInnes `hdbscan` package, pinned to `0.8.33` (the
-   final release available before the paper's submission period), with
+   latest non-release-candidate stable version before arXiv v1 on
+   2024-05-10), with
    `min_cluster_size=10`, `min_samples=None` (therefore 10),
    `cluster_selection_epsilon=5`, Euclidean distance,
    `approx_min_span_tree=True`, `cluster_selection_method="eom"`,
-   `alpha=1.0`, and `allow_single_cluster=False`. Discard noise label `-1`.
+   `alpha=1.0`, `allow_single_cluster=False`, `algorithm="best"`, and
+   `core_dist_n_jobs=4`. Discard noise label `-1`. Record all effective
+   values, and require repeated identical synthetic input to produce identical
+   labels before accepting the dependency in Gate A.
    Reference mode operates on the complete filtered-corner sequence; it may
    not silently chunk, subsample, or use approximate external clustering.
 4. **Eq. (3) association.** Compute each original HDBSCAN cluster's head and
@@ -64,13 +68,17 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    `(k*delta_t,(k+1)*delta_t]`, observation time `t_k=k*delta_t`. Thus the
    first 30 ms are unused. An empty window produces no observation, not an
    interpolated point.
-6. **COLMAP.** Pin COLMAP `3.9.1`, the final release available before the
-   paper's publication. Undistort Eq. (4) mean pixel locations with each
+6. **COLMAP.** Pin COLMAP `3.9.1`, the latest non-release-candidate stable
+   version before arXiv v1 on 2024-05-10. Undistort Eq. (4) mean pixel
+   locations with each
    scene's `calib.txt`, then use one fixed known `PINHOLE` camera. Insert
    correspondences for every pair of windows observing the same track, run
    COLMAP's default geometric verification and incremental mapper, keep the
    largest model, and exclude unregistered windows/tracks from later stages.
-   Record every effective option and failure. Ignoring distortion, only
+   Use the original `K` as the new camera matrix after undistortion and set
+   `ba_refine_focal_length=false`, `ba_refine_principal_point=false`, and
+   `ba_refine_extra_params=false`. Record every effective option and failure.
+   Ignoring distortion, only
    adjacent-window pairs, and bypassing verification are sensitivity variants.
 7. **Plane/circle initialization.** Follow
    [`geometry_conventions.md`](geometry_conventions.md): interpret the printed
@@ -96,7 +104,17 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    the orbit term. Report negative `r` or `f`; do not hide them with a
    constraint. Any alternate manifold or solver requires a preregistered
    numerical-equivalence gate.
-10. **Unavailable metrics.** Without independently authenticated numeric
+10. **Orbit phase origin.** Let `k*` be the earliest-time registered view in
+    the largest retained COLMAP model. Set `t_ref=t_{k*}` in seconds,
+    `tau_k=t_k-t_ref`, and `theta_k=2*pi*f*tau_k`; `t_ref` is a fixed gauge
+    convention, not an optimized variable. Define `u` from the same `C_{k*}`
+    so zero phase is aligned to that centre's plane-projected radial direction
+    (and the initial orbit passes it exactly in the noise-free on-circle
+    fixture). The paper's literal
+    indexing could instead imply that window 1 is registered and `t_ref=0`;
+    that unstated assumption differs by a small phase when the first retained
+    view is later, and is not the frozen reference interpretation.
+11. **Unavailable metrics.** Without independently authenticated numeric
     speed labels or CAD/alignment assets, frequency MAE/RMSE and CAD RMSE in
     millimetres must fail closed. Axis output remains Qualitative because the
     paper itself makes only a qualitative claim. Within-speed consistency and
@@ -124,7 +142,10 @@ change.
 3. **Gate B:** COLMAP, plane/circle, and FFT initialization tests.
 4. **Gate C:** direct-GTSAM factor and gauge-aware synthetic recovery.
 5. **Gate D:** integrated synthetic run, provenance, checkpoint/resume, and
-   fail-closed unavailable metrics.
+   fail-closed unavailable metrics. Before public data, measure all-pairs
+   correspondence count, whole-stream HDBSCAN memory, and runtime on a
+   deterministic synthetic problem sized to exercise the expected `O(K^2)`
+   correspondence risk.
 6. **Gate E:** fixed implementation-review scenes, then one all-72 run only
    after Claude Code and Codex approve A-D.
 
@@ -134,9 +155,13 @@ change.
   `70ac861187cb75d840e40ef0f67c5392cf9587d15f33f5ea42022b4df9df6f21`.
 - Claude Code independently reviewed arXiv v1, SHA-256
   `7ad59e3495d37a0772e8d2274db9202a0c1601f1434779aaa4ad3b826d6caa00`.
-  A normalized full-text comparison found identical method text, Eqs. (1)-(14),
-  tables, and references; the only residual tokens were arXiv page numbers
-  2-10. Both identities remain in provenance.
+  Codex performed the normalized full-text comparison and found identical
+  method text, Eqs. (1)-(14), tables, and references; the only residual tokens
+  were arXiv page numbers 2-10. Both identities remain in provenance.
+- Unless a paper-specific source states otherwise, dependency selection uses
+  one cutoff: the latest stable non-release-candidate version available before
+  arXiv v1 on 2024-05-10. This yields `hdbscan==0.8.33`, COLMAP `3.9.1`, and
+  GTSAM `4.2`; it does not claim that the authors used those builds.
 - TOPSPIN concept DOI is `10.5281/zenodo.10884693`; version DOI is
   `10.5281/zenodo.10884694`. The official API reports license ID
   `cc-by-4.0`; redistribution of derivatives requires attribution.
@@ -166,4 +191,5 @@ forbidden.
 |---|---|---|---|
 | 2026-11-24 | Repository and Gate 0 draft created; no implementation or result accepted yet. | CVPR paper and public-artifact audit | Codex draft; Claude review pending |
 | 2026-11-24 | Gate 0 draft rejected with seven documentation blockers; primary interpretations revised without running code or TOPSPIN. | Claude Code review of `7e498ee`; arXiv v1/CVF comparison; Zenodo API | Codex revision; Claude rereview pending |
+| 2026-11-24 | Gate 0 conditionally approved and Gate A authorized; phase origin and seven non-blocking audit details frozen before Gate B. | Claude Code review of `6826b9f` | Claude Code and Codex |
 

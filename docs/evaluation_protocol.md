@@ -41,6 +41,16 @@ optimize the method.
   grounds for a parameter change or exclusion.
 - Resume only at completed stage boundaries whose input, config, dependency,
   and source fingerprints match exactly.
+- Before any public-data execution, Gate D must record all-pairs
+  correspondence count, peak memory and runtime for whole-stream HDBSCAN, and
+  peak memory and runtime for COLMAP injection on a deterministic synthetic
+  scale fixture. This measurement does not permit chunking or approximation.
+- Record effective `hdbscan` values including `algorithm` and
+  `core_dist_n_jobs`, and verify repeated identical synthetic input produces
+  identical labels.
+- If direct GTSAM reports an indeterminate/singular linear system, count a
+  reference-path failure. Do not add a prior or change solver/variables as a
+  recovery action.
 
 ## Permitted public-TOPSPIN outputs
 

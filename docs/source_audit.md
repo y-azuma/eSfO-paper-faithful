@@ -91,9 +91,10 @@ states minimum cluster size `minPts=10` and selection epsilon `5`. Mapping
 these words to a particular API (for example `min_cluster_size=10`,
 `cluster_selection_epsilon=5`, and an unspecified `min_samples`) and scaling
 the `(t,x,y)` coordinates are **Ambiguous** decisions that must be frozen
-before public-data execution. The frozen reference selects the final
-pre-publication release, `hdbscan==0.8.33`; this is an audited interpretation,
-not evidence of the authors' version.
+before public-data execution. The frozen reference selects
+`hdbscan==0.8.33`, the latest stable non-RC release available before arXiv v1
+on 2024-05-10. This common version cutoff is an audited interpretation, not
+evidence of the authors' version.
 
 ### COLMAP
 
@@ -102,8 +103,10 @@ procedure, mapper or bundle-adjustment options, fixed-intrinsics policy, or
 failure/retry behavior. TOPSPIN calibration contains distortion coefficients
 while the paper equations use a pinhole `K`; the undistortion stage is not
 specified. These choices remain **Ambiguous**, not tunable by TOPSPIN results.
-The frozen reference selects pre-publication COLMAP `3.9.1`; this is not a
-claim about the authors' build.
+The frozen reference selects COLMAP `3.9.1`, the latest stable non-RC release
+available before arXiv v1 on 2024-05-10; this is not a claim about the authors'
+build. Undistortion's new camera matrix and bundle-adjustment refinement flags
+are also absent from the paper and therefore frozen interpretations.
 
 ### Factor graph / GTSAM
 
@@ -114,6 +117,11 @@ path is the most auditable reference implementation, but its missing choices
 remain **Ambiguous**. A custom solver can only be an equivalence-qualified
 alternative on a preregistered deterministic problem; it cannot silently
 replace the reference path.
+
+The frozen reference selects GTSAM `4.2`, the latest stable non-RC release
+available before arXiv v1 on 2024-05-10. The same cutoff selects
+`hdbscan==0.8.33` and COLMAP `3.9.1`; none of these choices is evidence of the
+authors' environment.
 
 ## Directly auditable paper details and evidence boundaries
 
@@ -138,8 +146,15 @@ The paper does not uniquely specify the time-to-pixel scale in `(t,x,y)`, the
 distance domain of Eq. (2), exact eFAST implementation, HDBSCAN API mapping,
 cluster-merge conflict policy, COLMAP version/settings, FFT preprocessing,
 factor-graph variables/priors/noise/solver settings, CAD alignment protocol,
-or several aggregation conventions. These remain Ambiguous unless an audited
+absolute orbit phase origin, or several aggregation conventions. These remain
+Ambiguous unless an audited
 primary citation resolves them.
+
+In the frozen reference, `t_ref` is the time in seconds of the earliest
+registered view in the largest retained COLMAP model, the same view used to
+define `u`. The paper does not state this rule. It is a deterministic phase
+gauge chosen to make the initialized orbit pass that camera centre, not a
+paper-reported value or a choice made from TOPSPIN performance.
 
 For the frozen primary interpretation, frontend time is expressed as
 `t_ms = (t_us - t_1) / 1000` in Eq. (2), HDBSCAN, and Eq. (3). This remains an

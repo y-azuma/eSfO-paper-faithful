@@ -1,6 +1,6 @@
 # Geometry conventions for the paper-faithful reference path
 
-Status: **Gate 0 revision; no implementation-fidelity claim yet**.
+Status: **Gate 0 conditionally approved; no implementation-fidelity claim yet**.
 
 This document freezes the geometric conventions needed to implement eSfO.
 It separates statements printed in the paper from conventions that are needed
@@ -91,9 +91,13 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    angle = atan2(||n x z||, n^T z).
    ```
 
-   If `n` is parallel to `z`, use the identity.  If `n` is antiparallel to
-   `z`, use a pi rotation about the deterministic Cartesian axis least aligned
-   with `n`.  These branch rules are **Frozen interpretations**.
+   Define `eps_parallel = 32 * eps_float64`.  Treat `||n x z|| <=
+   eps_parallel` as the parallel/antiparallel branch.  If `n^T z >= 0`, use
+   the identity.  Otherwise choose the least-aligned Cartesian basis vector
+   `e` (ties resolve `x`, then `y`, then `z`), form
+   `axis=normalize(e-(e^T n)n)`, and use a pi rotation about that axis.  The
+   projection makes the axis exactly orthogonal to `n`; the tolerance and tie
+   rule are **Frozen interpretations**.
 
 4. Project the **centred** points as
 
@@ -118,11 +122,12 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    A negative `r^2` beyond a documented floating-point tolerance is a
    reference-path failure.
 
-5. Form the first radial direction from the first registered camera centre,
+5. Let `k*` be the earliest-time registered view in the largest retained
+   COLMAP model.  Form the first radial direction from that same centre,
    project it onto the fitted plane, and normalize:
 
    ```text
-   u_raw = (I - n n^T) (C_1 - c^w)
+   u_raw = (I - n n^T) (C_{k*} - c^w)
    u     = normalize(u_raw)
    v     = normalize(n x u).
    ```
@@ -158,11 +163,23 @@ from the following three result-independent invariants:
 
 ### Frozen transform directions and formula
 
+The paper does not state an absolute phase origin.  Freeze `k*` as the
+earliest-time registered view in the largest retained COLMAP model and set
+`t_ref=t_{k*}` in seconds.  The factor graph treats `t_ref` as a constant, not
+an optimized variable.  This uses the same centre that defines `u`, so zero
+phase has its plane-projected radial direction; for a noise-free centre on the
+fitted circle, the initialized orbit passes `C_{k*}` exactly.  Reading the
+displayed window indices literally could instead assume that window 1 is
+registered and `t_ref=0`; when the first retained view is later, that
+paper-unstated assumption introduces phase `2 pi f t_{k*}`.  It is recorded
+as an alternative interpretation, not the reference path.
+
 Define the right-handed orbit basis and phase rotation
 
 ```text
 B        = [u  v  n] in SO(3), where v = n x u
-theta_k  = 2 pi f (t_k - t_ref)
+tau_k    = t_k - t_ref, in seconds
+theta_k  = 2 pi f tau_k
 S(theta) = Rot_z(theta) in the orbit basis.
 ```
 
@@ -219,7 +236,8 @@ R_0 = U diag(1,1,det(U V^T)) V^T.
 
 The reference weights are uniform over registered views.  This is a
 **Frozen interpretation** because the paper provides no `R_0` initialization
-rule.  A geodesic mean or a look-at initialization is **Sensitivity only**.
+rule.  Every `theta_k` here uses the same frozen `t_ref=t_{k*}`.  A geodesic
+mean or a look-at initialization is **Sensitivity only**.
 
 ## Required pre-data tests
 
@@ -231,23 +249,29 @@ used.  Passing them validates implementation consistency, not paper accuracy.
 - Recover a known non-axis-aligned plane and circle from exact centres.
 - Verify `n^T u = 0`, unit norms, `v = n x u`, and the positive temporal sign.
 - Verify recovery after an arbitrary global rotation and translation.
-- Exercise `n` parallel and antiparallel to `z`.
+- Exercise `n` parallel, near-parallel, antiparallel, and near-antiparallel to
+  `z`, including the Cartesian-axis tie rule.
 - Reject rank-deficient plane fits, collinear circle points, negative `r^2`,
   and an unobservable first radial direction.
 
 ### Analytic orbit tests
 
-For `f > 0` and `t_ref=0`, verify the Eq. (1) centres:
+For `f > 0`, express these times relative to the frozen `t_ref` and verify the
+Eq. (1) centres:
 
 ```text
-C(0)       = c + r u
-C(1/(4f))  = c + r v
-C(1/(2f))  = c - r u.
+C(t_ref)          = c + r u
+C(t_ref+1/(4f))   = c + r v
+C(t_ref+1/(2f))   = c - r u.
 ```
 
 At every tested time, recover the camera centre from the homogeneous pose and
 compare it with Eq. (1).  For pairs of times, compare the relative
 camera-to-world orientation with `Rot(n,2 pi f Delta t)`.
+For the initialization fixture, verify that the analytic orbit passes the
+earliest registered centre `C_{k*}` exactly.  Shift every absolute time and
+`t_ref` by the same constant and verify unchanged centres, poses, and
+projections.
 
 ### Transform and projection tests
 
@@ -278,6 +302,11 @@ must freeze the perturbation coordinates, finite-difference step, absolute and
 relative tolerances, and scaling for `r`, `f`, `c`, `n`, `u`, `R_0`, and the
 3D point before accepting the direct-GTSAM factor.  Tolerances may not be
 selected from TOPSPIN behavior.
+
+If direct GTSAM raises `IndeterminantLinearSystemException` (or an equivalent
+singular-system failure), reference evaluation reports a failure.  It must not
+add a prior, change the 14-parameter representation, or retry with a different
+solver in response.
 
 ## Reporting rule
 
