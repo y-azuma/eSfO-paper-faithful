@@ -28,10 +28,19 @@ optimize the method.
 - Verify all archives against Zenodo sizes and MD5 values.
 - Record source URL, record version, acquisition time, archive hash, scene
   hash, calibration, event count, duration, and timestamp unit.
-- Use a fixed small scene set for implementation review only.
+- Use only the preregistered three scenes in D-007 for implementation review:
+  `camera-diagonal-slow`, `hubble-perpendicular-med`, and
+  `tdrs-sideon-fast`. They are diagnostic, never a tuning set.
 - Run all 72 scenes once after Gates 0-D and both reviewers approve.
 - Include every failure in the denominator and record the first failing stage.
 - Do not change reference settings after observing results.
+- Use each complete scene. Do not silently truncate, chunk, subsample, or
+  approximate whole-stream HDBSCAN.
+- A 24-hour per-scene wall-clock guard and a 26 GiB process/container RAM cap
+  on the 4070 host are resource limits. Timeout/OOM is a reported failure, not
+  grounds for a parameter change or exclusion.
+- Resume only at completed stage boundaries whose input, config, dependency,
+  and source fingerprints match exactly.
 
 ## Permitted public-TOPSPIN outputs
 
@@ -40,6 +49,9 @@ optimize the method.
 - internal reprojection residuals before and after orbit refinement;
 - circular-trajectory diagnostics;
 - within-category frequency consistency, explicitly not accuracy;
+- track-age distributions corresponding to the internal claim in Fig. 8b;
+- COLMAP-versus-eSfO reprojection residual distributions corresponding to the
+  internal claim in Fig. 10;
 - qualitative orbit, sparse point cloud, and screw-line figures;
 - runtime, peak RAM, dependency versions, input hashes, and Git identity.
 
@@ -50,7 +62,8 @@ must refuse to compute:
 
 - frequency MAE/RMSE against numeric turntable GT;
 - CAD ICP RMSE in millimetres;
-- rotation-axis angular error;
+- numeric rotation-axis angular error (the paper makes only a qualitative
+  axis claim and public TOPSPIN has no authenticated axis ground truth);
 - exact numerical reproduction of plot-only paper figures.
 
 ## Reporting language
@@ -59,4 +72,8 @@ If the frozen implementation does not reproduce paper behavior, report a
 **reproduction failure of the frozen primary interpretation**. Do not call it
 a refutation of the paper. If required artifacts are missing, report the claim
 as **Unavailable**, not failed.
+
+All transformed or redistributed TOPSPIN-derived artifacts must retain
+attribution required by the official `CC-BY-4.0` record license. Raw archives
+are not committed to this code repository.
 

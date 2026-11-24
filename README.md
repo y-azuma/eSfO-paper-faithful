@@ -26,6 +26,7 @@ The governing documents are:
 - [`docs/traceability_matrix.md`](docs/traceability_matrix.md)
 - [`docs/decision_log.md`](docs/decision_log.md)
 - [`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)
+- [`docs/geometry_conventions.md`](docs/geometry_conventions.md)
 
 No interpretation may be changed because it improves TOPSPIN performance.
 
@@ -41,6 +42,7 @@ No interpretation may be changed because it improves TOPSPIN performance.
 8. FFT frequency initialization from the mean event x coordinate (paper Eqs. 9-10).
 9. Orbit-constrained factor-graph refinement (paper Eqs. 11-14).
 
-The implementation will be added only after the preimplementation decisions
-have been independently reviewed by Codex and Claude Code.
+The first Gate 0 review of commit `7e498ee` requested documentation changes.
+The implementation will be added only after the revised preimplementation
+decisions have been independently approved by Codex and Claude Code.
 
