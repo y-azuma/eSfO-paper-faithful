@@ -103,10 +103,11 @@ The CI workflow installs the pinned GTSAM extra and executes the same
 synthetic suite on Python 3.10. Commit
 `1bccdd693dcdf229a0db03825ff04b03e8b3a505` passed GitHub Actions run
 `45368753199`, job `138357216972`, on Ubuntu 24.04 with Python 3.10.14. An
-earlier run exposed only an over-tight exact-invariance test tolerance: the
-Ubuntu round-off was `1.14e-13` while the preregistered test allowed
-`6e-14`. The test-only tolerance was widened to `2e-13`; the factor,
-Jacobian, solver, and recovery implementation were unchanged.
+earlier runs exposed only over-tight exact-invariance test tolerances: the
+largest observed Ubuntu round-off was `1.14e-13`, while individual assertions
+allowed `5e-14` or `6e-14`. Those test-only tolerances were normalized to
+`2e-13`; the factor, Jacobian, solver, and recovery implementation were
+unchanged.
 
 The exact same commit was then checked out independently on the RTX 4070
 workstation at

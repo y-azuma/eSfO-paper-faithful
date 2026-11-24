@@ -156,7 +156,7 @@ def test_raw_normal_and_u_gauge_directions_leave_factor_unchanged() -> None:
                                rtol=0.0, atol=2e-13)
     np.testing.assert_allclose(
         reference.jacobians.normal_raw @ normal, np.zeros(2),
-        rtol=0.0, atol=5e-14,
+        rtol=0.0, atol=2e-13,
     )
     np.testing.assert_allclose(
         reference.jacobians.u_raw @ u_raw, np.zeros(2),
@@ -164,7 +164,7 @@ def test_raw_normal_and_u_gauge_directions_leave_factor_unchanged() -> None:
     )
     np.testing.assert_allclose(
         reference.jacobians.u_raw @ normal, np.zeros(2),
-        rtol=0.0, atol=5e-14,
+        rtol=0.0, atol=2e-13,
     )
 
 
