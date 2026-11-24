@@ -45,9 +45,12 @@ optimize the method.
   correspondence count, peak memory and runtime for whole-stream HDBSCAN, and
   peak memory and runtime for COLMAP injection on a deterministic synthetic
   scale fixture. This measurement does not permit chunking or approximation.
-- Record effective `hdbscan` values including `algorithm` and
-  `core_dist_n_jobs`, and verify repeated identical synthetic input produces
-  identical labels.
+- Record effective `hdbscan` values including `algorithm`,
+  `core_dist_n_jobs`, `max_cluster_size`, and `p`, and verify repeated
+  identical synthetic input produces identical labels.
+- Report merged-track and cluster-pair counts whose original HDBSCAN time
+  spans intersect. This is a diagnostic of the frozen weak-component rule,
+  not a basis for filtering or changing association.
 - If direct GTSAM reports an indeterminate/singular linear system, count a
   reference-path failure. Do not add a prior or change solver/variables as a
   recovery action.

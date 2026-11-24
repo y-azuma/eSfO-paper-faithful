@@ -154,6 +154,29 @@ def test_fan_in_cycle_and_input_order_do_not_change_components() -> None:
     }
 
 
+def test_temporally_overlapping_merged_clusters_are_reported_only() -> None:
+    # Clusters 0 and 1 overlap in time and independently fan in to cluster 2.
+    # The diagnostic must expose the mixed temporal support without changing
+    # the frozen weak-component merge.
+    clusters = (
+        _cluster(0, [[0.0, 10.0, 10.0], [10.0, 10.0, 10.0]]),
+        _cluster(1, [[5.0, 11.0, 10.0], [15.0, 11.0, 10.0]]),
+        _cluster(2, [[20.0, 10.0, 10.0]]),
+    )
+
+    result = _merge_clusters_unchecked(clusters, n_sigma=1, phi=30.0)
+
+    assert result.components == ((0, 1, 2),)
+    assert result.diagnostics.merged_track_count == 1
+    assert result.diagnostics.temporal_overlap_rule == (
+        "closed_cluster_time_span_intersection"
+    )
+    assert result.diagnostics.temporal_overlap_pairs == ((0, 0, 1),)
+    assert result.diagnostics.temporally_overlapping_cluster_pair_count == 1
+    assert result.diagnostics.temporally_overlapping_track_ids == (0,)
+    assert result.diagnostics.temporally_overlapping_track_count == 1
+
+
 def test_track_windows_follow_literal_eq4_boundaries_and_skip_empty() -> None:
     _, clusters = _build(
         t_ms=[0.0, 30.0, 60.0, 60.001, 90.0, 120.0],

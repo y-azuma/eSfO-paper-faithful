@@ -23,6 +23,18 @@ def test_event_sequence_converts_microseconds_to_relative_milliseconds() -> None
     np.testing.assert_array_equal(relative.p, [1, 0, 1])
 
 
+def test_reference_time_conversion_uses_literal_division() -> None:
+    events = EventSequence.from_arrays(
+        t_us=[1_000_000, 1_000_009], x=[0, 0], y=[0, 0], p=[0, 0],
+        width=1, height=1,
+    )
+
+    converted = events.to_relative_ms().t_ms[1]
+
+    assert converted == float(9) / 1000.0
+    assert converted != float(9) * 0.001
+
+
 def test_equal_timestamp_input_order_is_preserved() -> None:
     events = EventSequence.from_arrays(
         t_us=[10, 10, 10],

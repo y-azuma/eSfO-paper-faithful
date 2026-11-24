@@ -65,6 +65,8 @@ def test_hdbscan_reference_parameters_and_noise_exclusion() -> None:
     assert parameters["allow_single_cluster"] is False
     assert parameters["algorithm"] == "best"
     assert parameters["core_dist_n_jobs"] == 4
+    assert parameters["max_cluster_size"] == 0
+    assert parameters["p"] is None
     with np.testing.assert_raises(TypeError):
         result.metadata["cluster_count"] = 0
     with np.testing.assert_raises(TypeError):

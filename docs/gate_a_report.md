@@ -1,6 +1,6 @@
 # Gate A report: synthetic front-end verification
 
-Status: **implemented locally; independent review pending**.
+Status: **mutually approved; Gate B authorized**.
 
 Gate A verifies only the Sec. 4 front end on deterministic synthetic inputs.
 It does not use TOPSPIN, estimate paper performance, or select an
@@ -19,6 +19,8 @@ interpretation from public-data results.
   frozen effective options recorded and noise label `-1` excluded;
 - one-shot cluster descriptors, one nearest forward edge per tail, strict
   `phi=30`, deterministic tie-breaking, and one weak-component merge;
+- conservative diagnostics for merged components whose original-cluster
+  closed time spans overlap, without altering the merge or observations;
 - literal Eq. (4) indexing and half-open/closed windows, with no fabricated
   observation for empty track/window pairs;
 - content hashes, configuration/source/input fingerprints, and atomic JSON
@@ -33,7 +35,7 @@ unavailable eSfO author build is not claimed.
 
 ## Synthetic verification
 
-The frozen Python 3.10 test suite contains 55 tests covering:
+The frozen Python 3.10 test suite contains 57 tests covering:
 
 - timestamp units, stable equal-timestamp ordering, sensor bounds, and
   fail-closed polarity validation;
@@ -41,14 +43,16 @@ The frozen Python 3.10 test suite contains 55 tests covering:
   separation, SAE initialization, and border behavior;
 - Eq. (2) radius boundary, raw-event versus corner queries, time/polarity, and
   global per-polarity thresholds;
-- real `hdbscan==0.8.33` parameter metadata, noise handling, and repeated-run
+- real `hdbscan==0.8.33` parameter metadata (including the inherited
+  `max_cluster_size=0` and `p=None` defaults), noise handling, and repeated-run
   determinism;
-- Eq. (3) direction, strict gate, distance/time/ID ties, fan-in, cycles, and
-  input-order-invariant components;
+- Eq. (3) direction, strict gate, distance/time/ID ties, fan-in, cycles,
+  input-order-invariant components, and overlap diagnostics;
 - Eq. (4) first-window omission, boundaries, floor rule, and empty windows;
 - configuration separation and provenance/content sensitivity.
 
-Local result on 2026-11-24: `55 passed`; statement coverage `83%`.  Four
+Local result on 2026-11-24 after the review follow-ups: `57 passed`; statement
+coverage `83%`. Four
 warnings originate inside `hdbscan==0.8.33` from a NumPy API deprecated after
 that frozen dependency was released; they do not change the test result.
 
@@ -59,10 +63,28 @@ requirements.  CI is a pinned dependency smoke test on Ubuntu 24.04; it is
 not yet the bit-for-bit container image required for final archival
 reproduction.
 
-## Evidence boundary and next gate
+## Independent review and next gate
+
+Claude Code independently recreated the pinned environment and reproduced the
+pre-follow-up result (`55 passed`, 83% coverage). It also compared the
+independent eFAST implementation with a scratch-only transcription of the
+cited upstream criterion on 300 random streams and 150 structured streams:
+171,761 event decisions, including 1,282 structured corners, had zero
+disagreements. No upstream source was copied into this repository. The review
+found no blocking issue, approved negative-infinity SAE initialization, and
+authorized Gate B.
+
+The review identified a one-ulp discrepancy between multiplying by `0.001`
+and the frozen literal division by `1000`. The reference implementation now
+uses division and has a discriminating regression fixture. It also records
+the two previously implicit HDBSCAN defaults and reports temporal overlap
+diagnostics for merged weak components. These are fidelity/provenance fixes,
+not method changes.
+
+## Evidence boundary
 
 Passing Gate A establishes internal conformance to the frozen interpretation,
-not accuracy or agreement with hidden author outputs.  Gate B will implement
+not accuracy or agreement with hidden author outputs. Gate B may now implement
 and test COLMAP initialization, plane/circle fitting, and FFT initialization.
-It must not begin until Claude Code has checked the `t_ref` follow-up diff and
-reviewed this Gate A implementation.
+Public TOPSPIN execution remains prohibited until the later gates and mutual
+review are complete.

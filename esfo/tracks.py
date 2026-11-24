@@ -137,11 +137,30 @@ class FeatureTrack:
 
 
 @dataclass(frozen=True)
+class AssociationDiagnostics:
+    """Diagnostics for consequences of the frozen weak-component merge.
+
+    An overlap is a closed-interval intersection between the time spans of
+    two original HDBSCAN clusters in one merged component.  It is reported
+    conservatively and never changes association or observation extraction.
+    Each tuple is ``(track_id, first_cluster_id, second_cluster_id)``.
+    """
+
+    merged_track_count: int
+    temporal_overlap_rule: str
+    temporal_overlap_pairs: tuple[tuple[int, int, int], ...]
+    temporally_overlapping_cluster_pair_count: int
+    temporally_overlapping_track_ids: tuple[int, ...]
+    temporally_overlapping_track_count: int
+
+
+@dataclass(frozen=True)
 class AssociationResult:
     """Directed choices plus the one-shot weak-component merge result."""
     edges: tuple[AssociationEdge, ...]
     components: tuple[tuple[int, ...], ...]
     tracks: tuple[FeatureTrack, ...]
+    diagnostics: AssociationDiagnostics
 
 
 @dataclass(frozen=True)
@@ -269,8 +288,20 @@ def _merge_clusters_unchecked(
         for _, members in sorted(component_map.items(), key=lambda item: min(item[1]))
     )
     tracks: list[FeatureTrack] = []
+    temporal_overlap_pairs: list[tuple[int, int, int]] = []
     for members in components:
         component_clusters = [by_id[cluster_id] for cluster_id in members]
+        for left_index, left_cluster in enumerate(component_clusters):
+            left_start = float(left_cluster.points_txy[0, 0])
+            left_end = float(left_cluster.points_txy[-1, 0])
+            for right_cluster in component_clusters[left_index + 1:]:
+                right_start = float(right_cluster.points_txy[0, 0])
+                right_end = float(right_cluster.points_txy[-1, 0])
+                if max(left_start, right_start) <= min(left_end, right_end):
+                    temporal_overlap_pairs.append((
+                        min(members), left_cluster.cluster_id,
+                        right_cluster.cluster_id,
+                    ))
         event_indices = np.concatenate(
             [cluster.event_indices for cluster in component_clusters]
         )
@@ -285,10 +316,20 @@ def _merge_clusters_unchecked(
             min(members), members, _readonly(event_indices[order]),
             _readonly(source_indices[order]), _readonly(points[order]),
         ))
+    overlap_pairs = tuple(temporal_overlap_pairs)
+    overlapping_track_ids = tuple(sorted({item[0] for item in overlap_pairs}))
     return AssociationResult(
         tuple(sorted(edges, key=lambda edge: edge.source_cluster_id)),
         components,
         tuple(tracks),
+        AssociationDiagnostics(
+            merged_track_count=sum(len(component) > 1 for component in components),
+            temporal_overlap_rule="closed_cluster_time_span_intersection",
+            temporal_overlap_pairs=overlap_pairs,
+            temporally_overlapping_cluster_pair_count=len(overlap_pairs),
+            temporally_overlapping_track_ids=overlapping_track_ids,
+            temporally_overlapping_track_count=len(overlapping_track_ids),
+        ),
     )
 
 
@@ -372,7 +413,8 @@ def track_observations(
 
 
 __all__ = [
-    "AssociationEdge", "AssociationResult", "EventCluster", "FeatureTrack",
-    "TrackObservation", "build_clusters", "merge_clusters",
+    "AssociationDiagnostics", "AssociationEdge", "AssociationResult",
+    "EventCluster", "FeatureTrack", "TrackObservation", "build_clusters",
+    "merge_clusters",
     "track_observations",
 ]

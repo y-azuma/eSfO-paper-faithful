@@ -1,6 +1,6 @@
 # Paper-faithful reproduction decision log
 
-Status: **Gate 0 conditionally approved; Gate A may proceed**
+Status: **Gate A mutually approved; Gate B may proceed**
 Scope: eSfO reproduction, not a method-improvement project.
 
 ## D-001 - Reproduction boundary
@@ -56,7 +56,9 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    `cluster_selection_epsilon=5`, Euclidean distance,
    `approx_min_span_tree=True`, `cluster_selection_method="eom"`,
    `alpha=1.0`, `allow_single_cluster=False`, `algorithm="best"`, and
-   `core_dist_n_jobs=4`. Discard noise label `-1`. Record all effective
+   `core_dist_n_jobs=4`, together with the otherwise inherited 0.8.33
+   defaults `max_cluster_size=0` and `p=None`. Discard noise label `-1`.
+   Record all effective
    values, and require repeated identical synthetic input to produce identical
    labels before accepting the dependency in Gate A.
    Reference mode operates on the complete filtered-corner sequence; it may
@@ -67,7 +69,10 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    paper's strict distance gate `< phi`. Break equal distances by earlier head
    time and then smaller stable cluster ID. Merge weakly connected components
    once. Sequential descriptor recomputation and one-to-one matching are not
-   reference behavior.
+   reference behavior. Report, without changing the merge, every merged track
+   containing original-cluster time spans whose closed intervals intersect;
+   this diagnostic exposes possible mixed observations caused by the frozen
+   weak-component interpretation.
 5. **Eq. (4) track windows.** Shift the first timestamp to zero and implement
    the displayed indices literally: `k=1..floor(T/delta_t)-1`, window
    `(k*delta_t,(k+1)*delta_t]`, observation time `t_k=k*delta_t`. Thus the
@@ -190,6 +195,39 @@ exact input/config/code fingerprints. After Gates A-D and mutual review, all
 72 public scenes are run once; adaptive retries or selective exclusion are
 forbidden.
 
+## D-008 - Gate B executable conventions frozen before implementation review
+
+- FFT initialization uses exact integer-microsecond 20 ms boundaries from the
+  raw `EventSequence`, so window membership cannot depend on the one-ulp
+  float conversion discussed in the Gate A review. Nyquist is a positive
+  candidate. If every positive-frequency power is exactly zero, the exact-tie
+  rule returns the lowest positive bin and records
+  `zero_positive_power=true`; adding a confidence threshold would be a new
+  paper-unstated rule.
+- The plane/circle implementation uses the float64 rank and degeneracy rules
+  recorded in [`geometry_conventions.md`](geometry_conventions.md). In
+  particular, it does not replace the printed ordinary regression with TLS
+  when a world-frame transform makes the regression vertical.
+- A largest COLMAP model is ordered first by registered image count, then by
+  reconstructed point count, then by the lowest numeric model-directory ID.
+  A source track mapping to multiple reconstructed points, or multiple source
+  tracks mapping to one point, is not resolved by selecting the most
+  convenient point: every non-bijective mapping is excluded and counted.
+- For COLMAP 3.9.1, raw all-pairs correspondences are imported through
+  `matches_importer --match_type raw`; this is the version-correct route that
+  invokes its geometric verification. `--match_type inliers` is prohibited
+  because it bypasses verification. The mapper uses an empty image directory
+  with `Mapper.extract_colors=0`, since no intensity image is part of an event
+  window, and all three intrinsic-refinement switches remain false.
+- The temporal normal-sign rule is sampled from registered camera centres.
+  After the positive FFT frequency is available, any adjacent registered-view
+  phase gap of at least `pi` is rejected as `temporal_sign_aliased`; otherwise
+  an aliased direction could be hidden by the later `R_0` initialization.
+
+These choices were made from versioned source behavior, algebra, and synthetic
+identifiability before TOPSPIN execution. They may be changed only for a
+reproducible code defect or stronger primary evidence, never for performance.
+
 ## Change log
 
 | Date | Decision | Evidence | Agreed by |
@@ -198,4 +236,6 @@ forbidden.
 | 2026-11-24 | Gate 0 draft rejected with seven documentation blockers; primary interpretations revised without running code or TOPSPIN. | Claude Code review of `7e498ee`; arXiv v1/CVF comparison; Zenodo API | Codex revision; Claude rereview pending |
 | 2026-11-24 | Gate 0 conditionally approved and Gate A authorized; phase origin and seven non-blocking audit details frozen before Gate B. | Claude Code review of `6826b9f` | Claude Code and Codex |
 | 2026-11-24 | Gate A audit exposed an unstated SAE-initialization convention. Negative infinity was frozen because relative time starts at zero and every unseen cell must be older than every observed event. No TOPSPIN or other performance result was run or used; cross-review remains pending. | Static comparison with cited eFAST revision; synthetic time-shift and initialization fixtures | Codex; Claude Code review pending |
+| 2026-11-24 | Gate A approved with no blocking findings and Gate B authorized. Negative-infinity SAE initialization was mutually accepted after an independent differential check reported zero disagreements on 171,761 synthetic events. The literal time equation was changed from multiplication to division to remove a one-ulp implementation/documentation mismatch; no public data was used. | Claude Code review of `d57e63f` and `dffc27b`; local synthetic regression tests | Claude Code and Codex |
+| 2026-11-24 | Gate B implementation and exact COLMAP 3.9.1 two-run synthetic integration completed. Parser/configuration guards and the temporal-sign alias failure were added from result-independent audits; no TOPSPIN scene or performance result was used. Gate B remains unapproved until independent review. | 107 synthetic unit tests; `artifacts/gate_b/colmap_synthetic/manifest.json` | Codex implementation; Claude Code review pending |
 

@@ -128,6 +128,14 @@ def test_frontend_result_is_hashable_and_atomically_serializable(tmp_path) -> No
     assert payload["clustering"]["metadata"]["parameters"][
         "min_cluster_size"
     ] == 10
+    assert payload["association"]["diagnostics"] == {
+        "merged_track_count": 0,
+        "temporal_overlap_pairs": [],
+        "temporal_overlap_rule": "closed_cluster_time_span_intersection",
+        "temporally_overlapping_cluster_pair_count": 0,
+        "temporally_overlapping_track_count": 0,
+        "temporally_overlapping_track_ids": [],
+    }
     assert payload["corner_mask"] == []
 
 

@@ -5,11 +5,14 @@ Latif, Park, and Chin, CVPR 2024).
 
 ## Status
 
-**Gate A: synthetic front-end verification.** Gate 0 was conditionally
-approved after independent Codex/Claude Code review.  The remaining phase
-origin convention and non-blocking audit details were frozen before Gate B.
-The Sec. 4 front end is implemented and tested only on synthetic fixtures; no
-public-TOPSPIN performance result is accepted as a paper reproduction result.
+**Gate B: initialization components.** Gate A was mutually approved after
+independent Codex/Claude Code review, including synthetic differential eFAST
+validation. The phase-origin convention and non-blocking audit details were
+frozen before Gate B. The Sec. 4 front end and local Gate B components are
+implemented and tested only on synthetic fixtures; no public-TOPSPIN
+performance result is accepted as a paper reproduction result. The pinned
+COLMAP 3.9.1 sidecar passed the preregistered two-run synthetic integration;
+independent Gate B review remains pending.
 The authors' paper-listed code URL and the supplementary material referenced
 by the paper are currently unavailable.
 
@@ -31,6 +34,7 @@ The governing documents are:
 - [`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)
 - [`docs/geometry_conventions.md`](docs/geometry_conventions.md)
 - [`docs/gate_a_report.md`](docs/gate_a_report.md)
+- [`docs/gate_b_report.md`](docs/gate_b_report.md)
 
 No interpretation may be changed because it improves TOPSPIN performance.
 
@@ -48,6 +52,7 @@ No interpretation may be changed because it improves TOPSPIN performance.
 
 The first Gate 0 review of commit `7e498ee` requested documentation changes.
 Claude Code conditionally approved the revised interpretation at `6826b9f`
-and authorized Gate A.  Gate B remains blocked until the follow-up convention
-commit `d57e63f` is reviewed.
+and authorized Gate A. It subsequently approved the `d57e63f` convention
+follow-up and the `dffc27b` Gate A implementation with no blocking findings,
+authorizing Gate B. Public-data execution remains blocked by the later gates.
 

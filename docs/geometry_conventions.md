@@ -1,6 +1,6 @@
 # Geometry conventions for the paper-faithful reference path
 
-Status: **Gate 0 conditionally approved; no implementation-fidelity claim yet**.
+Status: **Gate A mutually approved; frozen conventions authorized for Gate B**.
 
 This document freezes the geometric conventions needed to implement eSfO.
 It separates statements printed in the paper from conventions that are needed
@@ -83,6 +83,15 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    convention.  If `s` is numerically zero, the sign is unobservable and the
    initialization fails explicitly.
 
+   This sampled-chord sign rule has a Nyquist precondition that the paper does
+   not state: every adjacent **registered** view must advance by less than
+   `pi` radians at the positive FFT frequency.  A larger gap can make forward
+   motion indistinguishable from the opposite direction.  Once the frequency
+   estimate is available, the reference initializer therefore fails with
+   `temporal_sign_aliased` if any
+   `2*pi*f*(t_{k+1}-t_k) >= pi`; it does not choose a sign from reconstruction
+   quality.
+
 3. Construct `A = Rod(n,z)`, the active rotation mapping `n` to
    `z=(0,0,1)`.  For neither-parallel case use
 
@@ -138,6 +147,44 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
 
 An SVD/total-least-squares plane fit is geometrically attractive but is not
 the regression displayed in Eq. (6); it is therefore **Sensitivity only**.
+
+### Frozen numerical-degeneracy conventions
+
+The following float64 rules are fixed before any public-data execution. They
+make failure decisions reproducible; they are not fitted method parameters.
+
+- Every displayed least-squares system uses explicit
+  `rcond = eps_float64 * max(number_of_rows, number_of_columns)` and must have
+  full column rank.
+- The temporal sign is unobservable when
+  `abs(s) <= 64*eps*sum_k(||q_k|| ||q_{k+1}||)`.
+- A fitted `r^2` in the interval `[-tol_r2,0)` is clamped to zero only for
+  arithmetic roundoff, where
+  `tol_r2 = 64*eps*max(max_k ||y_k||^2, ||centre_2d||^2, |Theta_c[2]|)`.
+  A zero radius still fails because its radial direction is unobservable.
+- The earliest-view radial direction is unobservable when
+  `||u_raw|| <= 64*eps*max(r,max_k ||C_k-c||)`.
+- Input and constructed rotation matrices are accepted only when both the
+  infinity-norm orthogonality error and determinant error are at most
+  `256*eps`. Inputs are rejected rather than individually projected to
+  `SO(3)`.
+- Registered-view times must be strictly increasing. Duplicate timestamps are
+  a reference-path failure rather than an unstated view-ID tie rule.
+- The temporal sign is accepted only when every positive-frequency phase gap
+  between adjacent registered views is strictly less than `pi`. This is an
+  identifiability guard on the sampled-chord rule, not a fitted threshold.
+- The chordal `R_0` mean is unobservable when its smallest singular value is
+  no larger than `eps*3*sigma_max`. If the determinant correction is negative,
+  it is also unobservable when the two smallest singular values differ by no
+  more than that tolerance, because there is no unique singular direction to
+  flip. No arbitrary SVD completion is accepted.
+
+The paper's ordinary `z`-on-`x,y` regression is not equivariant under every
+noisy global rotation and cannot represent a vertical plane. Exact
+equivariance is therefore required only for noise-free transformed fixtures
+whose displayed regression remains full rank. A transform producing a
+vertical/rank-deficient regression must fail; the reference path must not
+silently replace Eq. (6) with total least squares.
 
 ## Orbit pose convention: Eqs. (1) and (11)--(14)
 
@@ -236,7 +283,9 @@ R_0 = U diag(1,1,det(U V^T)) V^T.
 
 The reference weights are uniform over registered views.  This is a
 **Frozen interpretation** because the paper provides no `R_0` initialization
-rule.  Every `theta_k` here uses the same frozen `t_ref=t_{k*}`.  A geodesic
+rule. The reference initializer requires the positive FFT frequency; later
+orbit equations can still represent and report a negative optimized
+frequency. Every `theta_k` here uses the same frozen `t_ref=t_{k*}`. A geodesic
 mean or a look-at initialization is **Sensitivity only**.
 
 ## Required pre-data tests

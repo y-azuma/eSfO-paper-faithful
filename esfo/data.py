@@ -207,7 +207,15 @@ class EventSequence:
             # Subtract as int64 first. TOPSPIN durations are far below int64
             # overflow and this keeps the first event exactly zero.
             t_ms = (self.t_us - self.t_us[0]).astype(np.float64)
-            t_ms *= float(scale_us_to_ms)
+            if float(scale_us_to_ms) == 1.0 / 1000.0:
+                # Keep the reference path literally identical to the frozen
+                # equation.  Multiplication by 0.001 differs by one ulp for
+                # some integer-microsecond timestamps.
+                t_ms /= 1000.0
+            else:
+                # Non-reference scales are available only to the explicitly
+                # labelled sensitivity path.
+                t_ms *= float(scale_us_to_ms)
         else:
             t_ms = np.empty(0, dtype=np.float64)
         return RelativeEventSequence(

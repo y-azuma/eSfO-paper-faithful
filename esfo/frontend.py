@@ -224,6 +224,9 @@ def _hdbscan_parameters_unchecked(config: FrontendConfig) -> dict[str, Any]:
         "match_reference_implementation": (
             config.hdbscan_match_reference_implementation
         ),
+        # Explicitly record otherwise inherited hdbscan==0.8.33 defaults.
+        "max_cluster_size": 0,
+        "p": None,
     }
 
 
