@@ -239,6 +239,7 @@ def _scale_reference_eligibility(
         and identity.get("logical_name") == arguments.sidecar_image
         and _is_docker_image_id(identity.get("image_id"))
         and identity.get("colmap_version") == COLMAP_VERSION
+        and identity.get("version_label") == COLMAP_VERSION
         and identity.get("revision") == COLMAP_TAG_COMMIT
         and _is_sha256(identity.get("colmap_binary_sha256"))
         and _is_sha256(identity.get("help_sha256"))
@@ -313,7 +314,15 @@ def _assert_execution_identity_matches(
     expected: dict[str, Any], observed: dict[str, Any],
 ) -> None:
     if canonical_hash(expected) != canonical_hash(observed):
-        raise RuntimeError("scale runner identity changed during measurement")
+        changed = sorted(
+            key for key in set(expected) | set(observed)
+            if canonical_hash(expected.get(key))
+            != canonical_hash(observed.get(key))
+        )
+        raise RuntimeError(
+            "scale runner identity changed during measurement; components="
+            + ",".join(changed),
+        )
 
 
 def _recheck_execution_identity(
@@ -620,6 +629,8 @@ def _sidecar_identity(image: str) -> dict[str, Any]:
     labels = record.get("Config", {}).get("Labels", {}) or {}
     if labels.get("org.opencontainers.image.revision") != COLMAP_TAG_COMMIT:
         raise RuntimeError("COLMAP sidecar revision label is not pinned")
+    if labels.get("org.opencontainers.image.version") != COLMAP_VERSION:
+        raise RuntimeError("COLMAP sidecar version label is not pinned")
     binary = subprocess.run(
         [
             "docker", "run", "--rm", "--network", "none",
@@ -646,6 +657,7 @@ def _sidecar_identity(image: str) -> dict[str, Any]:
         "image_id": image_id,
         "repo_digests": record.get("RepoDigests") or [],
         "revision": labels["org.opencontainers.image.revision"],
+        "version_label": labels["org.opencontainers.image.version"],
         "colmap_version": COLMAP_VERSION,
         "colmap_binary_sha256": fields[0],
         "help_sha256": canonical_hash(help_output),
@@ -658,6 +670,7 @@ def _sidecar_immutable_projection(identity: dict[str, Any]) -> dict[str, Any]:
         "image_id": identity.get("image_id"),
         "repo_digests": sorted(identity.get("repo_digests") or []),
         "revision": identity.get("revision"),
+        "version_label": identity.get("version_label"),
         "colmap_version": identity.get("colmap_version"),
         "colmap_binary_sha256": identity.get("colmap_binary_sha256"),
         "help_sha256": identity.get("help_sha256"),

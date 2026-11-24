@@ -82,7 +82,7 @@ def test_scale_execution_identity_drift_is_rejected() -> None:
     module._assert_execution_identity_matches(expected, dict(expected))
     changed = dict(expected)
     changed["script"] = {"sha256": "c" * 64}
-    with pytest.raises(RuntimeError, match="identity changed"):
+    with pytest.raises(RuntimeError, match="components=script"):
         module._assert_execution_identity_matches(expected, changed)
 
 
@@ -169,6 +169,7 @@ def test_scale_reference_eligibility_requires_clean_canonical_run(
             "logical_name": module.SIDECAR_IMAGE,
             "image_id": "sha256:" + "c" * 64,
             "colmap_version": module.COLMAP_VERSION,
+            "version_label": module.COLMAP_VERSION,
             "revision": module.COLMAP_TAG_COMMIT,
             "colmap_binary_sha256": "b" * 64,
             "help_sha256": "d" * 64,
@@ -351,6 +352,7 @@ def test_sidecar_identity_requires_revision_and_binary_hash(monkeypatch) -> None
                 "RepoDigests": ["example@sha256:digest"],
                 "Config": {"Labels": {
                     "org.opencontainers.image.revision": module.COLMAP_TAG_COMMIT,
+                    "org.opencontainers.image.version": module.COLMAP_VERSION,
                 }},
             }]),
             stderr="",
@@ -412,6 +414,7 @@ def test_scale_sidecar_tag_replacement_is_rejected() -> None:
         "image_id": "sha256:" + "1" * 64,
         "repo_digests": [],
         "revision": module.COLMAP_TAG_COMMIT,
+        "version_label": module.COLMAP_VERSION,
         "colmap_version": module.COLMAP_VERSION,
         "colmap_binary_sha256": "a" * 64,
         "help_sha256": "b" * 64,

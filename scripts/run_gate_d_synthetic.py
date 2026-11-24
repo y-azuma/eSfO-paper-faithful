@@ -655,6 +655,8 @@ def _collect_sidecar_identity(image: str) -> dict[str, Any]:
     labels = record.get("Config", {}).get("Labels", {}) or {}
     if labels.get("org.opencontainers.image.revision") != COLMAP_TAG_COMMIT:
         raise RuntimeError("COLMAP sidecar revision label is not the pinned commit")
+    if labels.get("org.opencontainers.image.version") != COLMAP_VERSION:
+        raise RuntimeError("COLMAP sidecar version label is not pinned")
     diagnostics_run = subprocess.run(
         [
             "docker", "run", "--rm", "--network", "none",
@@ -707,6 +709,10 @@ def _sidecar_checkpoint_identity(identity: dict[str, Any]) -> dict[str, Any]:
             labels.get("org.opencontainers.image.revision")
             if isinstance(labels, dict) else None
         ),
+        "version_label": (
+            labels.get("org.opencontainers.image.version")
+            if isinstance(labels, dict) else None
+        ),
         "colmap_version": identity.get("colmap_version"),
         "colmap_tag_commit": identity.get("colmap_tag_commit"),
         "colmap_binary_sha256": identity.get("colmap_binary_sha256"),
@@ -717,7 +723,8 @@ def _sidecar_checkpoint_identity(identity: dict[str, Any]) -> dict[str, Any]:
     }
     required = (
         projection["logical_name"], projection["image_id"],
-        projection["revision_label"], projection["colmap_version"],
+        projection["revision_label"], projection["version_label"],
+        projection["colmap_version"],
         projection["colmap_tag_commit"],
         projection["colmap_binary_sha256"], projection["help_sha256"],
         projection["diagnostics_normalized_sha256"],
@@ -822,6 +829,8 @@ def _synthetic_reference_eligibility(
         and isinstance(identity.get("labels"), dict)
         and identity["labels"].get("org.opencontainers.image.revision")
         == COLMAP_TAG_COMMIT
+        and identity["labels"].get("org.opencontainers.image.version")
+        == COLMAP_VERSION
     ):
         reasons.append("invalid_pinned_sidecar_identity")
     return not reasons, reasons

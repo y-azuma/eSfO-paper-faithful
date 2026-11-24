@@ -112,6 +112,7 @@ def test_reference_eligibility_requires_clean_canonical_sidecar(
         "help_sha256": "d" * 64,
         "labels": {
             "org.opencontainers.image.revision": gate_d.COLMAP_TAG_COMMIT,
+            "org.opencontainers.image.version": gate_d.COLMAP_VERSION,
         },
     }
     monkeypatch.setattr(gate_d.platform, "system", lambda: "Linux")
@@ -361,6 +362,7 @@ def test_sidecar_identity_records_image_binary_version_and_linkage(monkeypatch) 
         "Created": "2026-11-24T00:00:00Z",
         "Config": {"Labels": {
             "org.opencontainers.image.revision": gate_d.COLMAP_TAG_COMMIT,
+            "org.opencontainers.image.version": gate_d.COLMAP_VERSION,
         }},
     }]
     diagnostics = (
@@ -406,6 +408,7 @@ def test_sidecar_identity_is_bound_to_checkpoint_fingerprint(
         "repo_digests": ["example@sha256:" + "2" * 64],
         "labels": {
             "org.opencontainers.image.revision": gate_d.COLMAP_TAG_COMMIT,
+            "org.opencontainers.image.version": gate_d.COLMAP_VERSION,
         },
         "colmap_version": gate_d.COLMAP_VERSION,
         "colmap_tag_commit": gate_d.COLMAP_TAG_COMMIT,
@@ -446,6 +449,7 @@ def test_sidecar_identity_is_rechecked_immediately_before_execution(
         "repo_digests": ["example@sha256:" + "2" * 64],
         "labels": {
             "org.opencontainers.image.revision": gate_d.COLMAP_TAG_COMMIT,
+            "org.opencontainers.image.version": gate_d.COLMAP_VERSION,
         },
         "colmap_version": gate_d.COLMAP_VERSION,
         "colmap_tag_commit": gate_d.COLMAP_TAG_COMMIT,
@@ -492,6 +496,7 @@ def test_sidecar_commands_use_bound_immutable_image_id(tmp_path, monkeypatch) ->
         "repo_digests": [],
         "labels": {
             "org.opencontainers.image.revision": gate_d.COLMAP_TAG_COMMIT,
+            "org.opencontainers.image.version": gate_d.COLMAP_VERSION,
         },
         "colmap_version": gate_d.COLMAP_VERSION,
         "colmap_tag_commit": gate_d.COLMAP_TAG_COMMIT,
