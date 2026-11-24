@@ -1,5 +1,10 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = [
+  "setuptools==69.5.1",
+  "wheel==0.43.0",
+  "Cython==0.29.37",
+  "numpy==1.26.4",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,15 +12,28 @@ name = "esfo-paper-faithful"
 version = "0.1.0"
 description = "Auditable reproduction of Event-based Structure-from-Orbit"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.11"
 dependencies = [
   "numpy==1.26.4",
-  "scipy==1.11.4",
+  "scipy==1.13.0",
   "hdbscan==0.8.33",
+  "scikit-learn==1.4.2",
+  "joblib==1.4.2",
+  "threadpoolctl==3.5.0",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9", "pytest-cov>=5,<7"]
+test = [
+  "pytest==8.2.0",
+  "pytest-cov==5.0.0",
+  "coverage[toml]==7.5.1",
+  "iniconfig==2.0.0",
+  "packaging==24.0",
+  "pluggy==1.5.0",
+  "exceptiongroup==1.2.1",
+  "tomli==2.0.1",
+  "typing-extensions==4.11.0",
+]
 evaluation = ["matplotlib>=3.8,<3.11", "pandas>=2.1,<2.4"]
 gtsam = ["gtsam==4.2"]
 

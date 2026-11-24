@@ -5,10 +5,13 @@ Latif, Park, and Chin, CVPR 2024).
 
 ## Status
 
-**Gate 0: evidence and interpretation review.** The implementation is not yet
-claimed complete and no public-TOPSPIN performance result is accepted as a
-paper reproduction result. The authors' paper-listed code URL and the
-supplementary material referenced by the paper are currently unavailable.
+**Gate A: synthetic front-end verification.** Gate 0 was conditionally
+approved after independent Codex/Claude Code review.  The remaining phase
+origin convention and non-blocking audit details were frozen before Gate B.
+The Sec. 4 front end is implemented and tested only on synthetic fixtures; no
+public-TOPSPIN performance result is accepted as a paper reproduction result.
+The authors' paper-listed code URL and the supplementary material referenced
+by the paper are currently unavailable.
 
 This repository separates five evidence classes:
 
@@ -27,6 +30,7 @@ The governing documents are:
 - [`docs/decision_log.md`](docs/decision_log.md)
 - [`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)
 - [`docs/geometry_conventions.md`](docs/geometry_conventions.md)
+- [`docs/gate_a_report.md`](docs/gate_a_report.md)
 
 No interpretation may be changed because it improves TOPSPIN performance.
 
@@ -43,6 +47,7 @@ No interpretation may be changed because it improves TOPSPIN performance.
 9. Orbit-constrained factor-graph refinement (paper Eqs. 11-14).
 
 The first Gate 0 review of commit `7e498ee` requested documentation changes.
-The implementation will be added only after the revised preimplementation
-decisions have been independently approved by Codex and Claude Code.
+Claude Code conditionally approved the revised interpretation at `6826b9f`
+and authorized Gate A.  Gate B remains blocked until the follow-up convention
+commit `d57e63f` is reviewed.
 

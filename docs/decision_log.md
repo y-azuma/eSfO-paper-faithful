@@ -36,7 +36,12 @@ inferred parts must remain distinguishable in code, provenance, and reports.
    equations. This is Ambiguous, but milliseconds are the most paper-derived
    choice because Table 2 gives both time windows in milliseconds and
    `phi=30` then has the same order as `delta_t=30 ms`. Seconds and raw
-   microseconds are preregistered sensitivity variants only.
+   microseconds are preregistered sensitivity variants only. In the independent
+   eFAST implementation, initialize unseen polarity-specific SAE cells to
+   negative infinity after this relative-time conversion. This preserves the
+   published strict newest-arc ordering and is equivalent to the cited
+   upstream's zero initialization when its input timestamps are positive;
+   it is a frozen convention, not a tuned improvement.
 2. **Eq. (2).** Use Euclidean distance in `(t_ms,x,y)` with inclusive radius
    `lambda=7`. The neighbor set is the raw event set `E`; the query is an
    eFAST corner and only same-polarity neighbors are counted. The polarity-wise
@@ -192,4 +197,5 @@ forbidden.
 | 2026-11-24 | Repository and Gate 0 draft created; no implementation or result accepted yet. | CVPR paper and public-artifact audit | Codex draft; Claude review pending |
 | 2026-11-24 | Gate 0 draft rejected with seven documentation blockers; primary interpretations revised without running code or TOPSPIN. | Claude Code review of `7e498ee`; arXiv v1/CVF comparison; Zenodo API | Codex revision; Claude rereview pending |
 | 2026-11-24 | Gate 0 conditionally approved and Gate A authorized; phase origin and seven non-blocking audit details frozen before Gate B. | Claude Code review of `6826b9f` | Claude Code and Codex |
+| 2026-11-24 | Gate A audit exposed an unstated SAE-initialization convention. Negative infinity was frozen because relative time starts at zero and every unseen cell must be older than every observed event. No TOPSPIN or other performance result was run or used; cross-review remains pending. | Static comparison with cited eFAST revision; synthetic time-shift and initialization fixtures | Codex; Claude Code review pending |
 
