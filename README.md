@@ -5,17 +5,17 @@ Latif, Park, and Chin, CVPR 2024).
 
 ## Status
 
-**Gate C: direct orbit factor and gauge-aware synthetic recovery.** Gate A was mutually approved after
-independent Codex/Claude Code review, including synthetic differential eFAST
-validation. The phase-origin convention and non-blocking audit details were
-frozen before Gate B. The Sec. 4 front end, Gate B initialization, and local
-Gate C direct-GTSAM factor are implemented and tested only on synthetic
-fixtures; no public-TOPSPIN
-performance result is accepted as a paper reproduction result. The pinned
-COLMAP 3.9.1 sidecar passed the preregistered two-run synthetic integration;
-Claude Code conditionally approved Gate B, its sole blocking temporal-sign
-finding has been corrected, and Gate C implementation now awaits independent
-cross-review.
+**Gate C: direct orbit factor and gauge-aware synthetic recovery.** Gate A was
+mutually approved after independent Codex/Claude Code review, including
+synthetic differential eFAST validation. The Sec. 4 front end, Gate B
+initialization, and Gate C direct-GTSAM factor are implemented and tested only
+on synthetic fixtures; no public-TOPSPIN performance result is accepted as a
+paper reproduction result. Claude Code approved D-009 and the Gate C factor,
+Jacobians, GTSAM wiring, provenance, gauge, and Sim(3) recovery criterion. Its
+review found two narrow integration blockers: the sparse-view temporal-sign
+reference point (B1-prime) and LM trial-step cheirality handling (C1). Both
+result-independent corrections are implemented and await focused re-review
+before integrated Gate D evidence is created.
 The authors' paper-listed code URL and the supplementary material referenced
 by the paper are currently unavailable.
 
@@ -39,6 +39,7 @@ The governing documents are:
 - [`docs/gate_a_report.md`](docs/gate_a_report.md)
 - [`docs/gate_b_report.md`](docs/gate_b_report.md)
 - [`docs/gate_c_report.md`](docs/gate_c_report.md)
+- [`docs/open_review_items.md`](docs/open_review_items.md)
 
 No interpretation may be changed because it improves TOPSPIN performance.
 

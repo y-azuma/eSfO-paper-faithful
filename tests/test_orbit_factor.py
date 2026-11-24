@@ -107,6 +107,7 @@ def test_exact_residual_and_frozen_residual_sign() -> None:
     arguments["observed_xy"] = initial.predicted_xy
     exact = evaluate_orbit_factor(**arguments)
 
+    assert exact.cheirality_penalty is False
     np.testing.assert_allclose(exact.residual_xy, np.zeros(2), rtol=0.0,
                                atol=0.0)
     arguments["observed_xy"] = initial.predicted_xy + np.asarray([2.0, -3.0])
@@ -217,7 +218,7 @@ def test_sign_equivalent_representation_and_negative_scalars_are_evaluated() -> 
     assert np.all(np.isfinite(evaluated.jacobians.radius))
 
 
-def test_degenerate_basis_cheirality_and_intrinsic_fail_explicitly() -> None:
+def test_degenerate_basis_cheirality_penalty_and_intrinsic_fail_explicitly() -> None:
     arguments = _fixture()
     zero_normal = arguments.copy()
     zero_normal["normal_raw"] = np.zeros(3)
@@ -251,9 +252,18 @@ def test_degenerate_basis_cheirality_and_intrinsic_fail_explicitly() -> None:
         + basis @ (orbit_coordinates + float(arguments["radius"])
                    * phase_coordinates)
     )
-    with pytest.raises(OrbitFactorError) as captured:
-        evaluate_orbit_factor(**behind)
-    assert captured.value.code == "point_behind_camera"
+    penalized = evaluate_orbit_factor(**behind)
+    assert penalized.cheirality_penalty is True
+    np.testing.assert_allclose(
+        penalized.camera_point, camera_point, rtol=0.0, atol=2e-15,
+    )
+    np.testing.assert_array_equal(penalized.residual_xy, [640.0, 640.0])
+    np.testing.assert_array_equal(
+        penalized.predicted_xy,
+        np.asarray(behind["observed_xy"]) + np.asarray([640.0, 640.0]),
+    )
+    for block in penalized.jacobians.ordered():
+        np.testing.assert_array_equal(block, np.zeros_like(block))
 
     skewed = arguments.copy()
     invalid_intrinsic = np.asarray(arguments["intrinsic"]).copy()

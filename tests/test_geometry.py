@@ -73,6 +73,10 @@ def test_exact_non_axis_orbit_recovers_geometry_r0_and_poses() -> None:
     )
 
     np.testing.assert_allclose(geometry.center_w, center, rtol=0.0, atol=2e-14)
+    np.testing.assert_allclose(
+        geometry.plane_diagnostics.temporal_center_w,
+        geometry.center_w, rtol=0.0, atol=2e-14,
+    )
     assert geometry.radius == pytest.approx(radius, abs=2e-14)
     np.testing.assert_allclose(geometry.normal_w, normal, rtol=0.0, atol=2e-14)
     np.testing.assert_allclose(geometry.u_w,
@@ -252,6 +256,60 @@ def test_temporal_sign_uses_only_nonaliased_registered_view_pairs() -> None:
     assert diagnostics.temporal_max_phase_gap_rad == pytest.approx(3.5325)
 
 
+def test_sparse_temporal_sign_is_referenced_to_fitted_circle_center() -> None:
+    # Only the middle chord is eligible.  Referencing it to the sample
+    # centroid reverses its sign, whereas referencing it to the fitted circle
+    # centre gives the exact counter-clockwise orientation.
+    phase = np.asarray([0.0, 5.80070104, 7.53891608, 12.68894639])
+    centers = np.column_stack((
+        np.cos(phase), np.sin(phase), np.zeros(phase.size),
+    ))
+    frequency = 1.0
+    time_s = phase / (2.0 * math.pi * frequency)
+    centroid = np.mean(centers, axis=0)
+    centroid_relative = centers - centroid
+    old_cross_z = float(np.cross(
+        centroid_relative[1], centroid_relative[2],
+    )[2])
+    assert old_cross_z < 0.0
+
+    fitted = fit_orbit_plane(centers, time_s, frequency)
+
+    np.testing.assert_allclose(
+        fitted.temporal_center_w, np.zeros(3), rtol=0.0, atol=2e-14,
+    )
+    np.testing.assert_allclose(
+        fitted.normal_w, [0.0, 0.0, 1.0], rtol=0.0, atol=2e-14,
+    )
+    assert fitted.temporal_total_pair_count == 3
+    assert fitted.temporal_eligible_pair_count == 1
+    assert fitted.temporal_excluded_pair_count == 2
+
+
+def test_sparse_circle_center_sign_is_world_frame_equivariant() -> None:
+    phase = np.asarray([0.0, 5.80070104, 7.53891608, 12.68894639])
+    base = np.column_stack((
+        np.cos(phase), np.sin(phase), np.zeros(phase.size),
+    ))
+    angle = 0.41
+    rotation = np.asarray([
+        [1.0, 0.0, 0.0],
+        [0.0, math.cos(angle), -math.sin(angle)],
+        [0.0, math.sin(angle), math.cos(angle)],
+    ])
+    translation = np.asarray([2.3, -1.4, 0.7])
+    centers = (rotation @ base.T).T + translation
+    fitted = fit_orbit_plane(centers, phase / (2.0 * math.pi), 1.0)
+
+    np.testing.assert_allclose(
+        fitted.temporal_center_w, translation, rtol=0.0, atol=3e-14,
+    )
+    np.testing.assert_allclose(
+        fitted.normal_w, rotation @ np.asarray([0.0, 0.0, 1.0]),
+        rtol=0.0, atol=3e-14,
+    )
+
+
 def test_temporal_sign_fails_only_when_no_nonaliased_pair_exists() -> None:
     trajectory, _, _, _, _, frequency = _exact_orbit()
 
@@ -394,7 +452,7 @@ def test_sign_equivalent_orbit_representation_is_algebraically_identical() -> No
 
 def _geometry_with_identity_basis() -> OrbitGeometryInitialization:
     plane = PlaneFit(
-        np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
+        np.zeros(3), np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
         np.asarray([0.0, 0.0, 1.0]), 3, 1.0, 1.0, 0.0,
         0.125, 2, 2, 0, math.pi / 4.0,
     )
@@ -489,7 +547,7 @@ def test_geometry_result_rejects_inconsistent_alignment_and_deep_freezes_metadat
 
     tilted = np.asarray([1.0, 0.0, 0.0])
     tilted_plane = PlaneFit(
-        np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
+        np.zeros(3), np.zeros(3), np.asarray([0.0, 0.0, -1.0]),
         tilted, 3, 1.0, 1.0, 0.0,
         0.125, 2, 2, 0, math.pi / 4.0,
     )

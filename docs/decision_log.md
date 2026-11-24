@@ -1,8 +1,11 @@
 # Paper-faithful reproduction decision log
 
-Status: **Gate A mutually approved; Gate B conditionally approved with B1
-corrected; Gate C local verification complete and cross-review pending**
+Status: **Gate A approved; D-009 and the Gate C core approved; B1-prime and
+C1 corrections implemented and awaiting focused re-review**
 Scope: eSfO reproduction, not a method-improvement project.
+
+Unclosed non-blocking findings and their mandatory closure gates are tracked
+in [`open_review_items.md`](open_review_items.md).
 
 ## D-001 - Reproduction boundary
 
@@ -289,8 +292,11 @@ follows.
   `eps_float64^(1/3)*max(1,abs(value))` for additive coordinates and
   `eps_float64^(1/3)` radians for each right-local rotation coordinate. The
   preregistered synthetic tolerance is `atol=rtol=2e-7`.
-- A non-positive depth or degenerate normalized basis is a reported factor
-  failure, never permission to prune an observation. Run default GTSAM 4.2
+- A degenerate normalized basis is a reported factor failure. A non-positive
+  depth keeps the factor and returns GTSAM 4.2's default constant
+  `(2*fx,2*fx)` penalty with zero Jacobians, so an invalid LM trial does not
+  abort the complete optimization. Record initial/final counts; a nonzero
+  final count makes reference metrics unavailable. Run default GTSAM 4.2
   Levenberg--Marquardt once, without priors, robust loss, solver fallback, or
   retry.
 - Judge synthetic recovery by reprojection and one joint proper-Sim(3)
@@ -303,6 +309,32 @@ follows.
 These rules are implementation conventions required by omissions in the
 paper. They were fixed from algebra and deterministic synthetic geometry,
 without TOPSPIN execution or performance-based selection.
+
+## D-011 - Post-review temporal-centre and cheirality corrections
+
+Independent review approved D-009 and the Gate C factor mathematics,
+Jacobians, GTSAM binding, provenance, ten-dimensional gauge, and joint-Sim(3)
+recovery test, but found two execution defects in frozen conventions. Before
+integrated Gate D evidence and without public-data execution, freeze their
+corrections as follows.
+
+- **B1-prime:** fit the unsigned plane and implicit circle before choosing the
+  normal sign. Use the resulting sign-independent world circle centre `c^w`
+  in `q_k=(I-nn^T)(C_k-c^w)`, then apply the existing phase-gap `<pi` pair
+  rule. Never substitute the sample centroid. Re-expressing the circle after
+  the sign choice must recover the same world centre within the documented
+  float64 scale tolerance.
+- **C1:** follow GTSAM 4.2 `GenericProjectionFactor` with
+  `throwCheirality=false`: for depth `<=0`, retain the factor, return residual
+  `(2*fx,2*fx)`, and return zero for all seven Jacobian blocks. Record initial
+  and final penalty counts. If any remain after the single default-LM run,
+  fail the reference scene and mark reprojection metrics unavailable; never
+  mix the penalty's pseudo-pixel into Fig. 10-style residuals.
+
+B1-prime follows the circular orbit in Eq. (1); C1 follows pinned GTSAM commit
+`4f66a491ffc83cf092d0d818b11dc35135521612`,
+`gtsam/slam/ProjectionFactor.h` lines 153--163. Neither rule was chosen from a
+TOPSPIN result.
 
 ## Change log
 
@@ -317,5 +349,6 @@ without TOPSPIN execution or performance-based selection.
 | 2026-11-24 | Gate B review exposed an ambiguous factor-observation scope. Before Gate C and without public-data execution, D-009 froze the literal Eq. (4) observation set for every bijectively initialized track; COLMAP registration is used for initialization, not residual-based observation selection. | Sec. 4.3 Eq. (4), Sec. 5.1 Eq. (5), Sec. 5.2 and Fig. 4; Claude Code Gate B review | Codex interpretation; Claude Code confirmation pending |
 | 2026-11-24 | Gate B received conditional approval. The sole blocking finding B1 was addressed by excluding only FFT-phase-aliased adjacent registered-view pairs from the temporal-sign score, failing only when none remain or the retained score is unobservable, and recording exclusion diagnostics. | Claude Code Gate B review; focused synthetic fixtures | Claude Code finding; Codex implementation; re-review pending |
 | 2026-11-24 | Gate C factor coordinates, residual sign, finite-difference rule, and ten-dimensional gauge were frozen before public-data execution. | Orbit algebra; GTSAM 4.2 local-coordinate API; deterministic synthetic rank analysis | Codex implementation; Claude Code review pending |
-| 2026-11-24 | Gate C direct factors, analytic Jacobians, D-009 observation provenance, prior-free GTSAM recovery, and the ten-dimensional gauge passed the complete synthetic suite on macOS, GitHub Ubuntu 24.04 CI, and the independent Ubuntu 24.04.4 4070 workstation. The only cross-platform corrections normalized test-only exact-invariance round-off tolerances from `5e-14`/`6e-14` to `2e-13`; no method or public-data result was changed. | 135 synthetic tests; GitHub Actions run `45368753199`; exact commit `1bccdd693dcdf229a0db03825ff04b03e8b3a505`; 4070 workstation rerun | Codex implementation and cross-platform verification; Claude Code re-review pending |
+| 2026-11-24 | Gate C direct factors, analytic Jacobians, D-009 observation provenance, prior-free GTSAM recovery, and the ten-dimensional gauge passed the complete synthetic suite. Cross-platform exact-invariance assertions were normalized from `5e-14`/`6e-14` to `2e-13`; no method or public-data result changed. This is intermediate core evidence, superseded for final Gate C status by the B1-prime/C1 correction evidence. | 135 synthetic tests; implementation commit `1bccdd693dcdf229a0db03825ff04b03e8b3a505`; GitHub Actions run `45368753199` | Codex implementation and cross-platform verification; Claude Code core review pending at that point |
+| 2026-11-24 | Independent review approved D-009 and the Gate C core, then identified B1-prime (centroid-referenced sparse chord) and C1 (CustomFactor cheirality exception). D-011 froze circle-centre sign scoring and the pinned GTSAM constant-penalty behavior before public-data execution. | Claude Code review of `bb1efce`; 899 noise-free orbit audit; GTSAM 4.2 primary source | Claude Code findings; Codex corrections; focused re-review pending |
 

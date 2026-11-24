@@ -11,9 +11,10 @@ from esfo.colmap import (
 )
 from esfo.geometry import RegisteredTrajectory
 from esfo.gtsam_backend import (
-    GTSAM_VERSION, OrbitFactorKeys, OrbitFactorMeasurement,
+    GTSAM_VERSION, OrbitFactorBinding, OrbitFactorKeys, OrbitFactorMeasurement,
     assert_gtsam_version, build_factor_observations,
-    make_orbit_custom_factor, optimize_orbit_graph,
+    count_nonpositive_depth_factors, make_orbit_custom_factor,
+    optimize_orbit_graph, optimize_orbit_graph_with_diagnostics,
 )
 from esfo.orbit_factor import evaluate_orbit_factor
 
@@ -65,6 +66,42 @@ def _factor_fixture():
     values.insert(keys.normal_raw, normal)
     values.insert(keys.u_raw, u_raw)
     return keys, measurement, values
+
+
+def _point_for_camera_point(
+    keys: OrbitFactorKeys,
+    measurement: OrbitFactorMeasurement,
+    values: gtsam.Values,
+    desired_camera_point: np.ndarray,
+) -> np.ndarray:
+    normal = values.atPoint3(keys.normal_raw)
+    normal = normal / np.linalg.norm(normal)
+    u_w = values.atPoint3(keys.u_raw)
+    u_w = u_w - normal * float(normal @ u_w)
+    u_w = u_w / np.linalg.norm(u_w)
+    basis = np.column_stack((u_w, np.cross(normal, u_w), normal))
+    phase = 2.0 * math.pi * values.atDouble(keys.frequency_hz) * (
+        measurement.time_s - measurement.t_ref_s
+    )
+    cosine, sine = math.cos(phase), math.sin(phase)
+    negative_phase_rotation = np.asarray([
+        [cosine, sine, 0.0],
+        [-sine, cosine, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    phase_coordinates = np.asarray([cosine, sine, 0.0])
+    orbit_coordinates = (
+        negative_phase_rotation.T
+        @ values.atRot3(keys.R0).matrix().T
+        @ np.asarray(desired_camera_point)
+    )
+    return (
+        values.atPoint3(keys.center_w)
+        + basis @ (
+            orbit_coordinates
+            + values.atDouble(keys.radius) * phase_coordinates
+        )
+    )
 
 
 def test_exact_gtsam_version_and_right_local_rot3_coordinates() -> None:
@@ -128,6 +165,108 @@ def test_default_lm_runs_direct_custom_factor_without_prior_or_retry() -> None:
     # A zero-residual underdetermined graph is accepted without adding an
     # anchoring prior; gauge handling belongs to result comparison.
     assert result.size() == values.size() == 7
+
+
+def test_cheirality_penalty_has_zero_jacobian_and_lm_does_not_abort() -> None:
+    keys, measurement, values = _factor_fixture()
+    behind_point = _point_for_camera_point(
+        keys, measurement, values, np.asarray([0.2, -0.1, -1.0]),
+    )
+    behind = gtsam.Values(values)
+    behind.erase(keys.point_w)
+    behind.insert(keys.point_w, behind_point)
+
+    factor = make_orbit_custom_factor(keys, measurement)
+    expected_penalty = 2.0 * measurement.intrinsic[0, 0]
+    np.testing.assert_array_equal(
+        factor.unwhitenedError(behind),
+        [expected_penalty, expected_penalty],
+    )
+    linear = factor.linearize(behind)
+    np.testing.assert_array_equal(linear.getA(), np.zeros((2, 17)))
+    np.testing.assert_array_equal(
+        linear.getb(), [-expected_penalty, -expected_penalty],
+    )
+
+    binding = OrbitFactorBinding(keys, measurement)
+    assert count_nonpositive_depth_factors(behind, (binding,)) == 1
+    graph = gtsam.NonlinearFactorGraph()
+    graph.add(factor)
+    optimized = optimize_orbit_graph_with_diagnostics(
+        graph, behind, (binding,),
+    )
+    assert optimized.diagnostics.factor_count == 1
+    assert optimized.diagnostics.initial_nonpositive_depth_count == 1
+    assert optimized.diagnostics.final_nonpositive_depth_count == 1
+    # The frozen zero-Jacobian penalty makes the invalid state stationary,
+    # but crucially the CustomFactor no longer aborts the complete LM call.
+    np.testing.assert_array_equal(
+        factor.unwhitenedError(optimized.values),
+        [expected_penalty, expected_penalty],
+    )
+
+    wrong_binding = OrbitFactorBinding(
+        OrbitFactorKeys.conventional(1), measurement,
+    )
+    with pytest.raises(ValueError, match="binding key order"):
+        optimize_orbit_graph_with_diagnostics(
+            graph, behind, (wrong_binding,),
+        )
+
+
+def test_default_lm_evaluates_a_negative_depth_trial_without_aborting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    keys, measurement, initial = _factor_fixture()
+    behind_point = _point_for_camera_point(
+        keys, measurement, initial, np.asarray([0.2, -0.1, -2.0]),
+    )
+    graph = gtsam.NonlinearFactorGraph()
+    graph.add(make_orbit_custom_factor(keys, measurement))
+
+    # Test-only anchors isolate the CustomFactor callback behavior; the
+    # reference optimizer never adds these priors.  A strong point target
+    # deliberately drives an LM trial through non-positive depth.
+    fixed3 = gtsam.noiseModel.Isotropic.Sigma(3, 1e-6)
+    fixed1 = gtsam.noiseModel.Isotropic.Sigma(1, 1e-6)
+    graph.add(gtsam.PriorFactorPoint3(
+        keys.point_w, behind_point,
+        gtsam.noiseModel.Isotropic.Sigma(3, 1e-3),
+    ))
+    graph.add(gtsam.PriorFactorPoint3(
+        keys.center_w, initial.atPoint3(keys.center_w), fixed3,
+    ))
+    graph.add(gtsam.PriorFactorDouble(
+        keys.radius, initial.atDouble(keys.radius), fixed1,
+    ))
+    graph.add(gtsam.PriorFactorDouble(
+        keys.frequency_hz, initial.atDouble(keys.frequency_hz), fixed1,
+    ))
+    graph.add(gtsam.PriorFactorRot3(
+        keys.R0, initial.atRot3(keys.R0),
+        gtsam.noiseModel.Isotropic.Sigma(3, 1e-6),
+    ))
+    graph.add(gtsam.PriorFactorPoint3(
+        keys.normal_raw, initial.atPoint3(keys.normal_raw), fixed3,
+    ))
+    graph.add(gtsam.PriorFactorPoint3(
+        keys.u_raw, initial.atPoint3(keys.u_raw), fixed3,
+    ))
+
+    from esfo import gtsam_backend
+    original_evaluation = gtsam_backend._factor_evaluation
+    penalty_visits: list[bool] = []
+
+    def tracked_evaluation(*args, **kwargs):
+        evaluation = original_evaluation(*args, **kwargs)
+        penalty_visits.append(evaluation.cheirality_penalty)
+        return evaluation
+
+    monkeypatch.setattr(gtsam_backend, "_factor_evaluation", tracked_evaluation)
+    result = optimize_orbit_graph(graph, initial)
+
+    assert any(penalty_visits)
+    assert result.size() == initial.size()
 
 
 def _view(

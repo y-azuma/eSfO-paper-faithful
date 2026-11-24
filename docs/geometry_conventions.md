@@ -1,6 +1,7 @@
 # Geometry conventions for the paper-faithful reference path
 
-Status: **Gate A mutually approved; frozen conventions authorized for Gate B**.
+Status: **Gate A approved; Gate C core approved; B1-prime and C1 corrections
+implemented and awaiting focused re-review**.
 
 This document freezes the geometric conventions needed to implement eSfO.
 It separates statements printed in the paper from conventions that are needed
@@ -71,8 +72,31 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    condition number.  A rank-deficient system or a non-finite solution is a
    reference-path failure, not permission to substitute a different fit.
 
-2. Fix the sign of `n` from temporal motion.  For plane-projected centred
-   vectors `q_k = (I - n n^T) X_k`, compute
+2. Before choosing the sign of `n`, construct a provisional active alignment
+   from the unsigned normal to `z`, project the **centred** points, and fit the
+   printed implicit circle:
+
+   ```text
+   y_k = first_two_components(A_unsigned (C_k - t_c))
+   [y_x  y_y  1] Theta_c = y_x^2 + y_y^2
+   centre_2d = (Theta_c[0]/2, Theta_c[1]/2)
+   c^w = A_unsigned^T (centre_2d[0], centre_2d[1], 0)^T + t_c.
+   ```
+
+   Reflecting the unsigned plane normal changes only the in-plane orthogonal
+   coordinates; transforming the fitted centre back to world coordinates
+   gives the same `c^w`. Thus the circle centre is available without choosing
+   the normal sign. Rank and radius-squared failures are checked here rather
+   than replaced by the sample centroid.
+
+3. Fix the sign of `n` from temporal motion **about the fitted circle
+   centre**. For
+
+   ```text
+   q_k = (I - n n^T) (C_k - c^w)
+   ```
+
+   compute
 
    ```text
    s = sum_k n^T (q_k x q_{k+1}).
@@ -92,10 +116,13 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    than allowed to vote on the sign.  The reference initializer fails with
    `temporal_sign_aliased` only if no non-aliased pair remains; it fails with
    `temporal_sign_unobservable` if the retained score is numerically zero. It
-   records the total, retained, and excluded pair counts and the maximum phase
-   gap.  It does not choose pairs from reconstruction quality.
+   records the total, retained, and excluded pair counts, maximum phase gap,
+   and the `c^w` used for the score. It does not choose pairs from
+   reconstruction quality. Referencing the chord to the sample centroid is
+   explicitly excluded: with sparse registered views the centroid can lie on
+   the opposite side of an otherwise identifiable chord.
 
-3. Construct `A = Rod(n,z)`, the active rotation mapping `n` to
+4. Construct `A = Rod(n,z)`, the active rotation mapping the now-signed `n` to
    `z=(0,0,1)`.  For neither-parallel case use
 
    ```text
@@ -111,7 +138,7 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    projection makes the axis exactly orthogonal to `n`; the tolerance and tie
    rule are **Frozen interpretations**.
 
-4. Project the **centred** points as
+   Re-express the circle with this signed alignment using
 
    ```text
    y_k = first_two_components(A (C_k - t_c)).
@@ -132,7 +159,9 @@ Let `C_k` be the COLMAP camera centres in temporal order and let
    ```
 
    A negative `r^2` beyond a documented floating-point tolerance is a
-   reference-path failure.
+   reference-path failure. The resulting world `c^w` must agree, to the
+   documented float64 scale tolerance, with the sign-reference centre from
+   step 2.
 
 5. Let `k*` be the earliest-time registered view in the largest retained
    COLMAP model.  Form the first radial direction from that same centre,
@@ -178,6 +207,9 @@ make failure decisions reproducible; they are not fitted method parameters.
   Excluded-pair count and maximum phase gap are recorded.  If no such pair
   remains, temporal direction is rejected as aliased. This is an
   identifiability guard on the sampled-chord rule, not a fitted threshold.
+- Every temporal chord is referenced to the fitted circle centre `c^w`, not
+  the sample centroid `t_c`. Circle fitting precedes sign selection; its world
+  centre is invariant to the provisional plane-normal sign.
 - The chordal `R_0` mean is unobservable when its smallest singular value is
   no larger than `eps*3*sigma_max`. If the determinant correction is negative,
   it is also unobservable when the two smallest singular values differ by no
@@ -353,8 +385,18 @@ the residual is
 e_p,k = project(K, R_cw(t_k) (x_p - C_w(t_k))) - z_p,k.
 ```
 
-Thus the sign is predicted minus observed. A non-positive camera depth is a
-reported reference-path failure; it does not permit removing that factor.
+Thus the sign is predicted minus observed. At a non-positive camera depth the
+factor is **not** removed and the optimizer is **not** interrupted. Following
+the pinned GTSAM 4.2 `GenericProjectionFactor` default, it returns the constant
+residual `(2*fx,2*fx)` and zero Jacobians for all seven variable blocks. This
+lets LM reject or move through an invalid trial step. Initial and final
+non-positive-depth factor counts are recorded. If any remain at the final
+state, the reference scene fails closed and its reprojection metric is
+unavailable; the constant penalty is never presented as a predicted pixel or
+mixed into the Fig. 10-style pixel-residual distribution. This convention is
+audited against
+[GTSAM commit `4f66a491...`, `ProjectionFactor.h` lines 153--163](https://github.com/borglab/gtsam/blob/4f66a491ffc83cf092d0d818b11dc35135521612/gtsam/slam/ProjectionFactor.h#L153-L163).
+
 Negative optimized `r` or `f` values are evaluated and reported rather than
 hidden with a positivity transform. Every factor uses isotropic
 `sigma=1 px`, squared Gaussian error, no robust loss, and no prior.
@@ -396,6 +438,8 @@ used.  Passing them validates implementation consistency, not paper accuracy.
 
 - Recover a known non-axis-aligned plane and circle from exact centres.
 - Verify `n^T u = 0`, unit norms, `v = n x u`, and the positive temporal sign.
+- Use a sparse-view fixture where the sample centroid gives the wrong chord
+  sign; verify the circle-centre rule before and after a world rigid transform.
 - Verify recovery after an arbitrary global rotation and translation.
 - Exercise `n` parallel, near-parallel, antiparallel, and near-antiparallel to
   `z`, including the Cartesian-axis tie rule.
@@ -434,6 +478,9 @@ projections.
   window and observations absent from the selected COLMAP point track.
 - Empty track/window pairs and non-bijective or uninitialized tracks must not
   contribute factors; factor counts must not depend on synthetic residuals.
+- Drive a real LM trial through non-positive depth; verify the constant GTSAM
+  penalty, zero Jacobians, no optimizer abort, auditable initial/final counts,
+  and fail-closed final reporting.
 
 ### Gauge and sign tests
 

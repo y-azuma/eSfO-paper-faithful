@@ -1,7 +1,8 @@
 # Gate C report: direct orbit factor and gauge-aware recovery
 
-Status: **local implementation and synthetic verification complete; independent
-cross-review pending**.
+Status: **factor mathematics, Jacobians, GTSAM binding, provenance, gauge, and
+Sim(3) recovery independently approved; C1 cheirality correction implemented
+and awaiting focused re-review**.
 
 Gate C implements only the paper's orbit-constrained reprojection stage under
 the frozen, result-independent conventions in
@@ -27,6 +28,12 @@ tolerance, solver, or observation.
 - direct GTSAM `4.2` default Levenberg--Marquardt, with no exception recovery,
   solver fallback, or retry.
 
+For a non-positive camera depth, the factor follows pinned GTSAM 4.2
+`GenericProjectionFactor` with `throwCheirality=false`: it remains in the
+graph, returns the constant residual `(2*fx,2*fx)`, and returns zero for all
+Jacobian blocks. This is ordinary factor evaluation, not a solver retry or
+factor-pruning recovery path.
+
 The observation builder keeps every original fixed-undistorted Eq. (4)
 observation for each bijectively initialized source track. This includes
 unregistered logical windows and observations absent from the selected
@@ -38,6 +45,24 @@ The extracted COLMAP model also preserves the complete selected-model
 `points3D` observation map as an immutable value. Consequently, D-009's
 retained/absent-in-COLMAP diagnostics can be reproduced directly from the
 stored model object without reparsing a mutable text export.
+
+## Cheirality behavior and reporting boundary
+
+Raising an exception inside a Python `CustomFactor` aborts the complete GTSAM
+LM call, including when only a rejected trial step crosses depth zero. The C1
+correction therefore mirrors the
+[primary GTSAM 4.2 implementation](https://github.com/borglab/gtsam/blob/4f66a491ffc83cf092d0d818b11dc35135521612/gtsam/slam/ProjectionFactor.h#L153-L163).
+A focused test drives a real LM
+trial through non-positive depth and verifies that optimization is not
+interrupted.
+
+An auditable binding associates every graph factor with its keys and
+measurement. The diagnostic optimizer records the number of non-positive
+depth factors at the initial and final values; binding count, order, and keys
+must match the graph. The integrated Gate D reference will fail closed if the
+final count is nonzero. In that case reprojection metrics are unavailable,
+and the constant penalty's pseudo-pixel is not included in Fig. 10-style
+pixel-residual outputs.
 
 ## Jacobian and gauge verification
 
@@ -91,34 +116,29 @@ On 2026-11-24, Python 3.10.6 with `numpy==1.26.4`, `scipy==1.13.0`, and
 `gtsam==4.2` reports:
 
 - 13 pure orbit-factor tests;
-- 12 GTSAM adapter, observation-scope, recovery, and gauge tests;
-- 24 Gate B geometry tests after the temporal-sign B1 correction;
-- `135 passed` for the complete synthetic suite;
-- statement coverage `85%`;
+- 14 GTSAM adapter, cheirality, observation-scope, recovery, and gauge tests;
+- 26 Gate B geometry tests after the B1/B1-prime corrections;
+- `139 passed` for the complete synthetic suite;
+- statement coverage `84%`;
 - four existing warnings inside frozen `hdbscan==0.8.33` caused by a later
   NumPy deprecation;
 - successful `compileall`, `pip check`, and `git diff --check`.
 
-The CI workflow installs the pinned GTSAM extra and executes the same
-synthetic suite on Python 3.10. Commit
+Before B1-prime/C1, intermediate implementation commit
 `1bccdd693dcdf229a0db03825ff04b03e8b3a505` passed GitHub Actions run
-`45368753199`, job `138357216972`, on Ubuntu 24.04 with Python 3.10.14. An
-earlier runs exposed only over-tight exact-invariance test tolerances: the
-largest observed Ubuntu round-off was `1.14e-13`, while individual assertions
-allowed `5e-14` or `6e-14`. Those test-only tolerances were normalized to
-`2e-13`; the factor, Jacobian, solver, and recovery implementation were
-unchanged.
+`45368753199` on Ubuntu 24.04 / Python 3.10.14. That evidence established the
+core but is not the final corrected Gate C result. The corrected implementation
+must pass the same pinned CI before focused re-review; its authoritative
+commit and run are recorded in the decision log after completion. A previous
+CPU-only rerun on the 4070 workstation is historical corroboration and is not
+relied on for the corrected result.
 
-The exact same commit was then checked out independently on the RTX 4070
-workstation at
-`/home/azumayudai/Desktop/ws_snn/eSfO-paper-faithful`. Ubuntu 24.04.4,
-Python 3.10.14, NumPy 1.26.4, SciPy 1.13.0, and GTSAM 4.2 again reported
-`135 passed` (four known HDBSCAN warnings), plus successful `compileall`,
-`pip check`, and `git diff --check`. This synthetic suite is CPU-only; the
-presence of the RTX 4070 is not evidence of GPU validation or performance.
-
-These cross-platform results still require independent Claude Code review
-before Gate C is called mutually approved.
+Claude Code independently re-derived all seven Jacobian blocks (maximum
+relative discrepancy `6.5e-10`), reproduced nullity ten, and recovered a
+perturbed synthetic problem from graph error `6.9e4` to `1.2e-24` with
+joint-Sim(3) RMSE `2.8e-16`. It approved D-009 and the Gate C core. Its C1
+finding and B1-prime Gate B finding are narrow post-review corrections, not a
+withdrawal of those approved results.
 
 ## Evidence boundary and next gate
 
@@ -128,7 +148,7 @@ internally consistent. It does not establish that the unpublished author code
 used these missing conventions or that the method reproduces paper behavior
 on TOPSPIN.
 
-After cross-review, Gate D may integrate the complete synthetic pipeline,
-stage-boundary provenance and resume logic, fail-closed unavailable metrics,
-and the preregistered scale/resource measurements. Public TOPSPIN execution
-remains prohibited until Gates A--D and both reviewers approve it.
+Gate D's stage-boundary provenance, resume, fail-closed metric, and resource
+instrumentation may proceed, but integrated synthetic evidence must use the
+focused-reapproved B1-prime/C1 commit. Public TOPSPIN execution remains
+prohibited until Gates A--D and both reviewers approve it.

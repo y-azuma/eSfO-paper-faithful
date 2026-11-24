@@ -21,6 +21,7 @@ import numpy as np
 _EPS = np.finfo(np.float64).eps
 _ROTATION_TOLERANCE = 256.0 * _EPS
 _UNIT_DEGENERACY_SCALE = 64.0 * _EPS
+_CHEIRALITY_PENALTY_FOCAL_MULTIPLIER = 2.0
 
 
 def _readonly(value: Any) -> np.ndarray:
@@ -126,6 +127,7 @@ class OrbitFactorEvaluation:
     v_w: np.ndarray
     basis_w: np.ndarray
     phase_rad: float
+    cheirality_penalty: bool
     jacobians: OrbitFactorJacobians
 
     def __post_init__(self) -> None:
@@ -139,8 +141,20 @@ class OrbitFactorEvaluation:
             ))
         phase = _finite_scalar("phase_rad", self.phase_rad)
         object.__setattr__(self, "phase_rad", phase)
+        if not isinstance(self.cheirality_penalty, bool):
+            raise ValueError("cheirality_penalty must be bool")
         if not isinstance(self.jacobians, OrbitFactorJacobians):
             raise ValueError("jacobians must be OrbitFactorJacobians")
+
+
+def _zero_jacobians() -> OrbitFactorJacobians:
+    """Return frozen zero blocks for the GTSAM cheirality penalty."""
+
+    return OrbitFactorJacobians(
+        np.zeros((2, 3)), np.zeros((2, 3)), np.zeros((2, 1)),
+        np.zeros((2, 1)), np.zeros((2, 3)), np.zeros((2, 3)),
+        np.zeros((2, 3)),
+    )
 
 
 def _normalized_orbit_basis(
@@ -246,14 +260,25 @@ def evaluate_orbit_factor(
         raise OrbitFactorError(
             "projection_nonfinite", "camera-space point is non-finite",
         )
-    depth = float(camera_point[2])
-    if depth <= 0.0:
-        raise OrbitFactorError(
-            "point_behind_camera", "projected point has non-positive depth",
-        )
-
     fx, fy = float(K[0, 0]), float(K[1, 1])
     cx, cy = float(K[0, 2]), float(K[1, 2])
+    depth = float(camera_point[2])
+    if depth <= 0.0:
+        # GTSAM's GenericProjectionFactor with throwCheirality=false uses a
+        # constant 2*fx residual and zero Jacobians.  Returning the same
+        # result lets LM reject an invalid trial step instead of aborting the
+        # complete optimization.  The factor remains in the graph.
+        residual = np.full(
+            2, _CHEIRALITY_PENALTY_FOCAL_MULTIPLIER * fx,
+            dtype=np.float64,
+        )
+        predicted = observed + residual
+        return OrbitFactorEvaluation(
+            _readonly(residual), _readonly(predicted), _readonly(camera_point),
+            _readonly(normal), _readonly(u_w), _readonly(v_w), _readonly(basis),
+            phase, True, _zero_jacobians(),
+        )
+
     predicted = np.asarray([
         fx * float(camera_point[0]) / depth + cx,
         fy * float(camera_point[1]) / depth + cy,
@@ -307,7 +332,7 @@ def evaluate_orbit_factor(
     return OrbitFactorEvaluation(
         _readonly(residual), _readonly(predicted), _readonly(camera_point),
         _readonly(normal), _readonly(u_w), _readonly(v_w), _readonly(basis),
-        phase, jacobians,
+        phase, False, jacobians,
     )
 
 

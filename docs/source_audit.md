@@ -134,6 +134,15 @@ available before arXiv v1 on 2024-05-10. The same cutoff selects
 `hdbscan==0.8.33` and COLMAP `3.9.1`; none of these choices is evidence of the
 authors' environment.
 
+GTSAM 4.2's primary
+[`GenericProjectionFactor` source](https://github.com/borglab/gtsam/blob/4f66a491ffc83cf092d0d818b11dc35135521612/gtsam/slam/ProjectionFactor.h#L153-L163)
+sets projection Jacobians to zero and returns
+`Vector2::Constant(2.0*K_->fx())` when cheirality fails and
+`throwCheirality=false` (the default). The frozen custom orbit factor mirrors
+that behavior so a temporary invalid LM trial is rejected or traversed rather
+than aborting the whole optimizer. This is an audited library convention,
+not a claim that the eSfO authors documented it.
+
 ## Directly auditable paper details and evidence boundaries
 
 | Item | Location | Auditable statement | Evidence boundary |

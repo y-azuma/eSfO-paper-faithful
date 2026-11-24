@@ -137,6 +137,7 @@ class RegisteredTrajectory:
 @dataclass(frozen=True)
 class PlaneFit:
     centroid_w: np.ndarray
+    temporal_center_w: np.ndarray
     coefficients_abc: np.ndarray
     normal_w: np.ndarray
     design_rank: int
@@ -152,6 +153,9 @@ class PlaneFit:
     def __post_init__(self) -> None:
         object.__setattr__(self, "centroid_w", _finite_array(
             "centroid_w", self.centroid_w, (3,),
+        ))
+        object.__setattr__(self, "temporal_center_w", _finite_array(
+            "temporal_center_w", self.temporal_center_w, (3,),
         ))
         object.__setattr__(self, "coefficients_abc", _finite_array(
             "coefficients_abc", self.coefficients_abc, (3,),
@@ -271,6 +275,14 @@ class OrbitGeometryInitialization:
         if not np.allclose(self.plane_diagnostics.normal_w, normal, rtol=0.0,
                            atol=_ROTATION_TOLERANCE):
             raise ValueError("plane diagnostics and normal_w disagree")
+        center_scale = max(1.0, float(np.linalg.norm(center)), radius)
+        if not np.allclose(
+            self.plane_diagnostics.temporal_center_w, center,
+            rtol=0.0, atol=_ROTATION_TOLERANCE * center_scale,
+        ):
+            raise ValueError(
+                "temporal-sign circle center and final center_w disagree",
+            )
         for name, value in (("first_view_id", self.first_view_id),
                             ("first_view_index", self.first_view_index),
                             ("circle_rank", self.circle_rank)):
@@ -403,7 +415,41 @@ def fit_orbit_plane(
         )
     normal = np.asarray([coefficients[0], coefficients[1], -1.0])
     normal /= np.linalg.norm(normal)
-    projected = centered - np.outer(centered @ normal, normal)
+    # The temporal orientation must be evaluated about the fitted orbit
+    # centre, not the sample centroid.  A sparse set of registered views can
+    # place its centroid on the opposite side of an otherwise unaliased chord
+    # and reverse that chord's sign.  The implicit-circle centre is invariant
+    # to the arbitrary sign of ``normal``: changing the sign only reflects the
+    # in-plane coordinates, and transforming the fitted centre back to world
+    # coordinates returns the same point.
+    unsigned_alignment = active_align_to_z(normal)
+    unsigned_points_2d = (
+        unsigned_alignment.rotation @ centered.T
+    ).T[:, :2]
+    circle_design = np.column_stack((
+        unsigned_points_2d[:, 0], unsigned_points_2d[:, 1],
+        np.ones(unsigned_points_2d.shape[0], dtype=np.float64),
+    ))
+    circle_rhs = np.sum(unsigned_points_2d * unsigned_points_2d, axis=1)
+    circle_rcond = _EPS * max(circle_design.shape)
+    circle_coefficients, _, circle_rank, _ = np.linalg.lstsq(
+        circle_design, circle_rhs, rcond=circle_rcond,
+    )
+    if circle_rank != 3 or not np.all(np.isfinite(circle_coefficients)):
+        raise GeometryInitializationError(
+            "circle_rank_deficient", "implicit circle fit has rank below 3",
+        )
+    temporal_center_2d, _, _ = _checked_circle_radius_squared(
+        circle_coefficients, unsigned_points_2d,
+    )
+    temporal_center_aligned = np.asarray([
+        temporal_center_2d[0], temporal_center_2d[1], 0.0,
+    ])
+    temporal_center = (
+        unsigned_alignment.rotation.T @ temporal_center_aligned + centroid
+    )
+    radial = centers - temporal_center
+    projected = radial - np.outer(radial @ normal, normal)
     phase_gaps = 2.0 * math.pi * frequency * np.diff(times)
     eligible = phase_gaps < math.pi
     eligible_count = int(np.count_nonzero(eligible))
@@ -432,7 +478,8 @@ def fit_orbit_plane(
         normal = -normal
         score = -score
     return PlaneFit(
-        _readonly(centroid), _readonly(coefficients), _readonly(normal),
+        _readonly(centroid), _readonly(temporal_center),
+        _readonly(coefficients), _readonly(normal),
         int(rank), _condition_number(design), score, tolerance, frequency,
         int(phase_gaps.size), eligible_count, excluded_count, max_phase_gap,
     )
@@ -556,6 +603,7 @@ def fit_orbit_geometry(
         "plane_fit": "ordinary_z_on_x_y_intercept",
         "plane_lstsq_rcond": rcond,
         "temporal_sign_tolerance": "64*eps*sum(norm(q_k)*norm(q_k+1))",
+        "temporal_sign_reference": "fitted_circle_center_w",
         "temporal_sign_frequency_hz": plane.temporal_frequency_hz,
         "temporal_sign_total_pair_count": plane.temporal_total_pair_count,
         "temporal_sign_eligible_pair_count": plane.temporal_eligible_pair_count,

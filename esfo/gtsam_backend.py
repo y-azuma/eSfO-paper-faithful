@@ -125,6 +125,20 @@ class OrbitFactorMeasurement:
         ))
 
 
+@dataclass(frozen=True)
+class OrbitFactorBinding:
+    """Auditable association between one factor's keys and measurement."""
+
+    keys: OrbitFactorKeys
+    measurement: OrbitFactorMeasurement
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.keys, OrbitFactorKeys):
+            raise TypeError("keys must be OrbitFactorKeys")
+        if not isinstance(self.measurement, OrbitFactorMeasurement):
+            raise TypeError("measurement must be OrbitFactorMeasurement")
+
+
 def _factor_evaluation(
     values: gtsam.Values,
     keys: OrbitFactorKeys,
@@ -191,6 +205,97 @@ def optimize_orbit_graph(
 
     assert_gtsam_version()
     return gtsam.LevenbergMarquardtOptimizer(graph, initial).optimize()
+
+
+@dataclass(frozen=True)
+class OrbitOptimizationDiagnostics:
+    """Cheirality counts at the two reportable optimizer boundaries."""
+
+    factor_count: int
+    initial_nonpositive_depth_count: int
+    final_nonpositive_depth_count: int
+
+    def __post_init__(self) -> None:
+        for name in (
+            "factor_count", "initial_nonpositive_depth_count",
+            "final_nonpositive_depth_count",
+        ):
+            value = getattr(self, name)
+            if (isinstance(value, bool) or not isinstance(value, (int, np.integer))
+                    or int(value) < 0):
+                raise ValueError(f"{name} must be a non-negative integer")
+            object.__setattr__(self, name, int(value))
+        if (self.initial_nonpositive_depth_count > self.factor_count
+                or self.final_nonpositive_depth_count > self.factor_count):
+            raise ValueError("cheirality count exceeds factor_count")
+
+
+@dataclass(frozen=True)
+class OrbitOptimizationResult:
+    """Default-LM result with boundary cheirality diagnostics."""
+
+    values: gtsam.Values
+    diagnostics: OrbitOptimizationDiagnostics
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.values, gtsam.Values):
+            raise TypeError("values must be gtsam.Values")
+        if not isinstance(self.diagnostics, OrbitOptimizationDiagnostics):
+            raise TypeError("diagnostics must be OrbitOptimizationDiagnostics")
+
+
+def count_nonpositive_depth_factors(
+    values: gtsam.Values,
+    bindings: Sequence[OrbitFactorBinding],
+) -> int:
+    """Count factors using the frozen non-positive-depth penalty."""
+
+    if not isinstance(values, gtsam.Values):
+        raise TypeError("values must be gtsam.Values")
+    bindings_tuple = tuple(bindings)
+    if any(not isinstance(binding, OrbitFactorBinding)
+           for binding in bindings_tuple):
+        raise TypeError("bindings must contain OrbitFactorBinding values")
+    return sum(
+        _factor_evaluation(
+            values, binding.keys, binding.measurement,
+        ).cheirality_penalty
+        for binding in bindings_tuple
+    )
+
+
+def optimize_orbit_graph_with_diagnostics(
+    graph: gtsam.NonlinearFactorGraph,
+    initial: gtsam.Values,
+    bindings: Sequence[OrbitFactorBinding],
+) -> OrbitOptimizationResult:
+    """Run default LM once and record initial/final cheirality counts.
+
+    ``bindings`` must describe every direct orbit factor in ``graph``.  The
+    explicit association avoids relying on opaque ``CustomFactor`` internals
+    when reproducing the diagnostic.  No factor is deleted or reweighted.
+    """
+
+    bindings_tuple = tuple(bindings)
+    if len(bindings_tuple) != graph.size():
+        raise ValueError("bindings must describe every graph factor")
+    for index, binding in enumerate(bindings_tuple):
+        if not isinstance(binding, OrbitFactorBinding):
+            raise TypeError("bindings must contain OrbitFactorBinding values")
+        factor_keys = tuple(int(key) for key in graph.at(index).keys())
+        if factor_keys != binding.keys.ordered():
+            raise ValueError(
+                "binding key order does not match its graph factor",
+            )
+    initial_count = count_nonpositive_depth_factors(initial, bindings_tuple)
+    result = optimize_orbit_graph(graph, initial)
+    final_count = count_nonpositive_depth_factors(result, bindings_tuple)
+    return OrbitOptimizationResult(
+        result,
+        OrbitOptimizationDiagnostics(
+            len(bindings_tuple), initial_count, final_count,
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -462,8 +567,10 @@ def build_factor_observations(
 
 __all__ = [
     "FactorObservation", "FactorObservationDiagnostics", "FactorObservationSet",
-    "GTSAM_DISTRIBUTION", "GTSAM_VERSION", "OrbitFactorKeys",
-    "OrbitFactorMeasurement", "assert_gtsam_version",
+    "GTSAM_DISTRIBUTION", "GTSAM_VERSION", "OrbitFactorBinding",
+    "OrbitFactorKeys", "OrbitFactorMeasurement", "OrbitOptimizationDiagnostics",
+    "OrbitOptimizationResult", "assert_gtsam_version",
     "build_factor_observations", "make_orbit_custom_factor",
-    "optimize_orbit_graph",
+    "count_nonpositive_depth_factors", "optimize_orbit_graph",
+    "optimize_orbit_graph_with_diagnostics",
 ]

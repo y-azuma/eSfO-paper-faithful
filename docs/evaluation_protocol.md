@@ -6,6 +6,10 @@ The evaluation asks whether the frozen primary interpretation executes and
 whether the paper's publicly auditable claims can be reproduced. It does not
 optimize the method.
 
+All unresolved independent-review obligations are tracked in
+[`open_review_items.md`](open_review_items.md); no public-data run may bypass
+that register.
+
 ## Stages
 
 ### Synthetic component and integration checks
@@ -61,6 +65,13 @@ optimize the method.
   unique point initialization. Record exclusion categories independently
   because split and merged categories can overlap. Do not prune by residual,
   depth, or outcome.
+- Record non-positive-depth factor counts at the initial and final optimizer
+  values. During LM, retain such a factor with the pinned GTSAM 4.2 constant
+  `(2*fx,2*fx)` residual and zero Jacobians; never abort the whole run merely
+  because a trial step crosses depth zero. If the final count is nonzero,
+  record a reference-path failure and mark all reprojection metrics
+  unavailable. Do not treat the constant penalty as a predicted pixel or mix
+  it into Fig. 10-style residual distributions.
 
 ## Permitted public-TOPSPIN outputs
 

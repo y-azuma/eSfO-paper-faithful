@@ -1,8 +1,9 @@
 # Gate B report: initialization components
 
 Status: **local implementation, synthetic unit tests, and pinned COLMAP 3.9.1
-sidecar integration complete; conditionally approved, with the sole blocking
-temporal-sign finding corrected and awaiting focused re-review**.
+sidecar integration complete; the initial B1 correction was accepted, and its
+B1-prime circle-centre follow-up is implemented and awaiting focused
+re-review**.
 
 Gate B implements the paper's COLMAP preparation, Eqs. (6)--(10)
 initialization, and the frozen conventions needed to make those operations
@@ -30,9 +31,10 @@ CAD result was used to choose or validate an interpretation.
 - derives COLMAP camera centres as `C_w=-R_cw^T t_cw`;
 - implements the printed ordinary `z=ax+by+c` regression and
   `n proportional to (a,b,-1)` rather than substituting total least squares;
-- fixes the normal sign from temporal motion using only adjacent registered
-  views whose positive-frequency phase gap is below `pi`, and explicitly
-  rejects an unobservable retained score;
+- fits the circle before choosing the normal sign, then scores temporal motion
+  about that sign-independent circle centre using only adjacent registered
+  views whose positive-frequency phase gap is below `pi`; explicitly rejects
+  an unobservable retained score;
 - records excluded registered-view pairs and the maximum phase gap, and
   rejects temporal aliasing only when no non-aliased pair remains;
 - implements all general/parallel/antiparallel Rodrigues branches;
@@ -82,12 +84,13 @@ paper-level TOPSPIN accuracy.
 
 ## Synthetic verification
 
-The current Gate B additions contain 53 focused tests:
+The current Gate B additions contain 55 focused tests:
 
 - 14 FFT fixtures for boundaries, floor, empty fill, DC, power, exact ties,
   Nyquist, harmonic non-correction, raw-event use, invariance, immutability,
   provenance, and failures;
-- 24 geometry fixtures for exact non-axis orbits, temporal sign and partial or
+- 26 geometry fixtures for exact non-axis orbits, circle-centred temporal sign
+  (including sparse and transformed sparse views) and partial or
   complete aliasing,
   all Rodrigues branches and threshold sides, phase/time/frame invariance,
   analytic centres,
@@ -98,11 +101,10 @@ The current Gate B additions contain 53 focused tests:
   fixed `K`, raw/verified postconditions, commands, model selection, and
   source-track/point mapping.
 
-Combined with Gate A and provenance tests, the local environment reports
-`110 passed`, with four warnings originating inside the frozen
-`hdbscan==0.8.33` dependency. Before the B1-only change, the same suite on the
-4070 Ubuntu host reported `107 passed` and statement coverage `84%`; the three
-additional fixtures exercise only the corrected pair-filtering rule.
+Combined with the later Gate C and provenance tests, the current local suite
+reports `139 passed`, with four warnings originating inside the frozen
+`hdbscan==0.8.33` dependency. The B1/B1-prime additions exercise only the
+result-independent pair filtering and circle-centre reference rules.
 
 ### Exact sidecar integration
 
@@ -142,14 +144,14 @@ non-manifest outputs; its own SHA-256 is
 
 ## Independent review outcome
 
-Claude Code conditionally approved Gate B and explicitly authorized the
-independent Gate C factor/Jacobian work. Its sole blocking finding was that
-rejecting the complete initialization when any registered-view phase gap was
-at least `pi` was stricter than the paper and could turn sparse COLMAP
-registration into an implementation-caused failure. The corrected rule uses
-only non-aliased adjacent pairs for the temporal sign, fails only when none
-remain or their score is unobservable, and records all exclusions.
-
-The B1 code, fixtures, and documentation now await a focused re-review. Gate C
-does not consume a temporal-sign result from public data, and its synthetic
-factor/Jacobian implementation was authorized to proceed in parallel.
+Claude Code accepted the B1 phase-gap filtering and D-009 observation scope.
+Its follow-up audit found B1-prime: an identifiable sparse chord can receive
+the wrong sign when it is referenced to the registered-view sample centroid.
+In 899 noise-free synthetic orbits the old reference failed twice; the fitted
+circle centre failed zero times. The corrected reference therefore fits the
+unsigned circle first and uses
+`q_k=(I-nn^T)(C_k-c^w)` for the unchanged non-aliased-pair score. A
+deterministic sparse fixture also proves the old and new signs differ, and a
+rotated/translated fixture checks the world-frame convention. No TOPSPIN
+scene or result selected this correction. The B1-prime difference now awaits
+focused re-review before integrated Gate D evidence.
